@@ -1716,15 +1716,71 @@ function wmoColor(code) { return (WMO_DATA[code]||['--','','#6b7280'])[2]; }
 const DEFAULT_LAT = 34.2044, DEFAULT_LON = 117.2851, DEFAULT_CITY = '徐州';
 const WEEK = ['日','一','二','三','四','五','六'];
 
+// 带超时的fetch
+function fetchWithTimeout(url, ms=6000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms);
+  return fetch(url, {signal:ctrl.signal}).finally(()=>clearTimeout(timer));
+}
+
 async function fetchWeather(lat, lon, city) {
-  // Open-Meteo API：current_weather用于当前，daily用于预报
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-    `&current_weather=true` +
-    `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
-    `&timezone=Asia%2FShanghai&forecast_days=4`;
-  const wRes = await fetch(url);
-  if (!wRes.ok) throw new Error('weather api error');
-  const d = await wRes.json();
+  // 先试 Open-Meteo，超时则降级到 wttr.in（国内通常可访问）
+  let d = null;
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current_weather=true` +
+      `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
+      `&timezone=Asia%2FShanghai&forecast_days=4`;
+    const wRes = await fetchWithTimeout(url, 5000);
+    if (wRes.ok) d = await wRes.json();
+  } catch(e) {}
+
+  // 降级：wttr.in JSON接口
+  if (!d) {
+    try {
+      const wRes2 = await fetchWithTimeout(
+        `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`, 5000
+      );
+      if (wRes2.ok) {
+        const w = await wRes2.json();
+        const cur = w.current_condition?.[0];
+        const temp2 = cur ? Math.round(parseFloat(cur.temp_C)) : null;
+        const desc2 = cur?.lang_zh?.[0]?.value || cur?.weatherDesc?.[0]?.value || '';
+        if (temp2 !== null) {
+          // 直接渲染wttr数据
+          const iconEl = document.getElementById('w-icon');
+          iconEl.textContent = '天';
+          iconEl.style.cssText = 'font-size:15px;font-weight:700;padding:2px 7px;border-radius:6px;background:#3b82f622;color:#3b82f6';
+          document.getElementById('w-temp').textContent = temp2 + '°C';
+          document.getElementById('w-temp').style.color = '#3b82f6';
+          document.getElementById('w-desc').textContent = desc2;
+          document.getElementById('w-city').textContent = '· ' + city;
+          // 未来3天
+          const fc = document.getElementById('w-forecast');
+          const days = w.weather?.slice(0,3) || [];
+          const dayNames = ['今','明','后'];
+          fc.innerHTML = days.map((day,i)=>{
+            const tmax = Math.round(parseFloat(day.maxtempC));
+            const tmin = Math.round(parseFloat(day.mintempC));
+            const desc = day.hourly?.[4]?.lang_zh?.[0]?.value || day.hourly?.[4]?.weatherDesc?.[0]?.value || '';
+            return `<div class="weather-day">
+              <div class="day-label" style="color:var(--muted)">${dayNames[i]||''}</div>
+              <div class="day-icon" style="font-size:11px;font-weight:700;padding:1px 5px;border-radius:4px;background:#3b82f622;color:#3b82f6">${desc.slice(0,2)||'--'}</div>
+              <div class="day-temp" style="font-size:11px;color:var(--text);font-weight:600">${tmin}~${tmax}°</div>
+            </div>`;
+          }).join('');
+          return;
+        }
+      }
+    } catch(e2) {}
+    // 两个API都失败
+    document.getElementById('w-icon').textContent = '--';
+    document.getElementById('w-temp').textContent = '';
+    document.getElementById('w-desc').textContent = '天气获取失败';
+    document.getElementById('w-city').textContent = '';
+    document.getElementById('w-forecast').innerHTML = '';
+    return;
+  }
 
   // 今日（current_weather）
   const cw   = d.current_weather;
