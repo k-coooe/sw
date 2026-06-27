@@ -127,12 +127,12 @@
         placeholder="示例：&#10;9787214151230-26&#9;26秋-实验班提优训练-北师-一数上&#10;9787214151414-26&#9;26秋-实验班提优训练-青岛（五四制）-一数上"></textarea>
       <div class="toolbar">
         <button class="primary" onclick="processSort()">▶ 解析并排序</button>
-        <button onclick="clearSort()">✕ 清空</button>
-        <button onclick="copySortResult()">📋 复制结果</button>
-        <button onclick="exportSortCSV()">💾 导出 CSV</button>
         <button class="green" onclick="syncToCombo()">⚡ 生成组合装</button>
+        <button style="background:#0891b2;color:#fff;border-color:#0891b2" onclick="copySortResult()">📋 复制结果</button>
+        <button onclick="exportSortCSV()">💾 导出 CSV</button>
         <span class="spacer"></span>
         <span class="stat" id="sort-stat"></span>
+        <button onclick="clearSort()">✕ 清空</button>
       </div>
     </div>
 
@@ -171,11 +171,12 @@
 
       <div class="toolbar">
         <button class="green" onclick="processCombo()">⚡ 生成组合装</button>
-        <button onclick="clearCombo()">✕ 清空</button>
-        <button onclick="copyComboResult()">📋 复制结果</button>
+        <button style="background:#7c3aed;color:#fff;border-color:#7c3aed" onclick="goToMatch()">🔗 去平台匹配</button>
+        <button style="background:#0891b2;color:#fff;border-color:#0891b2" onclick="copyComboResult()">📋 复制结果</button>
         <button onclick="exportComboCSV()">💾 导出 CSV</button>
         <span class="spacer"></span>
         <span class="stat" id="combo-stat"></span>
+        <button onclick="clearCombo()">✕ 清空</button>
       </div>
     </div>
 
@@ -199,19 +200,40 @@
 
   <!-- ═══ TAB 3: 平台SKU匹配 ═══ -->
   <div class="tab-panel" id="tab-match">
-    <div class="card flat-top">
-      <label class="field-label">粘贴平台SKU（格式：SKU编码 Tab 一年级上(26秋),数学计算能手(北师)）</label>
-      <textarea id="match-input"
-        placeholder="示例：&#10;1922741045122&#9;一年级上(26秋),数学计算能手(北师)&#10;1922741045121&#9;一年级上(26秋),数学计算能手(人教)"></textarea>
-      <div class="toolbar">
-        <button class="primary" onclick="processMatch()">🔗 解析并匹配</button>
-        <button onclick="clearMatch()">✕ 清空</button>
-        <button onclick="copyMatchResult()">📋 复制结果</button>
-        <button onclick="exportMatchCSV()">💾 导出 CSV</button>
-        <span class="spacer"></span>
-        <span class="stat" id="match-stat"></span>
+
+    <!-- 两栏输入 -->
+    <div style="display:flex;gap:12px;margin-bottom:0" class="match-inputs">
+
+      <!-- 左：平台SKU -->
+      <div class="card flat-top" style="flex:1;min-width:0">
+        <label class="field-label">① 平台SKU（编码 + 名称）</label>
+        <textarea id="match-input" style="height:90px"
+          placeholder="示例：&#10;1922741045122&#9;一年级上(26秋),数学计算能手(北师)"></textarea>
+        <div class="toolbar" style="margin-top:8px">
+          <button class="primary" onclick="processMatch()">🔗 解析并匹配</button>
+          <button style="background:#0891b2;color:#fff;border-color:#0891b2" onclick="copyMatchResult()">📋 复制</button>
+          <button onclick="exportMatchCSV()">💾 导出</button>
+          <span class="spacer"></span>
+          <span class="stat" id="match-stat"></span>
+          <button onclick="clearMatch()">✕ 清空</button>
+        </div>
       </div>
+
+      <!-- 右：历史组合装 -->
+      <div class="card" style="flex:1;min-width:0;border-top-left-radius:var(--radius)">
+        <label class="field-label">② 历史组合装（可从Tab2同步或手动粘贴）</label>
+        <textarea id="history-combo-input" style="height:90px"
+          placeholder="粘贴历史组合装导出数据（4列格式）：&#10;商家编码[Tab]组合装名称[Tab]单品编码[Tab]单品名称&#10;每个组合装占多行（几本就几行），直接从之前导出的CSV/复制结果粘贴即可"></textarea>
+        <div class="toolbar" style="margin-top:8px">
+          <button onclick="loadHistoryCombo()">📥 载入历史组合装</button>
+          <span class="spacer"></span>
+          <span class="stat" id="history-stat"></span>
+          <button onclick="document.getElementById('history-combo-input').value='';historyComboGroups=[];document.getElementById('history-stat').innerHTML=''">✕ 清空</button>
+        </div>
+      </div>
+
     </div>
+
     <div class="result-card">
       <div class="table-wrap">
         <table id="match-table">
@@ -223,7 +245,7 @@
             <th>匹配名称</th>
           </tr></thead>
           <tbody id="match-tbody">
-            <tr><td colspan="5" class="empty"><div class="icon">🔗</div>粘贴平台SKU后点击「解析并匹配」</td></tr>
+            <tr><td colspan="5" class="empty"><div class="icon">🔗</div>填入平台SKU后点击「解析并匹配」</td></tr>
           </tbody>
         </table>
       </div>
@@ -354,6 +376,14 @@ function switchTab(name) {
   });
 }
 
+// 跳转到平台匹配Tab，并把组合装数据写入历史组合装输入框
+function goToMatch() {
+  if (!comboGroups.length) { showToast('请先生成组合装'); return; }
+  // 当次生成的组合装已在 comboGroups 中，直接跳转即可，无需写入历史输入框
+  switchTab('match');
+  showToast(`✓ 已跳转，当次 ${comboGroups.length} 个组合装自动参与匹配`);
+}
+
 // ════════════════════════════════════════════
 //  TAB 1 – 单品排序
 // ════════════════════════════════════════════
@@ -475,34 +505,203 @@ function isSujiaoYu(yuEdition) {
   return ['苏教','江苏'].some(k => yuEdition.includes(k));
 }
 
-// 判断语文+数学是否允许配对
-function yuShuAllowed(yuEdition, shuEdition) {
-  if (isSujiaoYu(yuEdition)) {
-    // 苏教语文 → 只配苏教数学
-    return ['苏教','江苏'].some(k => shuEdition.includes(k));
+// ══════════════════════════════════════════════════════
+//  版本规格归一化系统
+//  规格 = 版本主体 + 变体标记（五四制等）
+//  "青岛版" = "青岛"（同规格），"青岛（五四制）" ≠ "青岛"（不同规格）
+// ══════════════════════════════════════════════════════
+
+// 规格变体标记（优先级从高到低匹配）
+const EDITION_VARIANTS = ['五四制','江苏专用','江苏版'];
+
+// 版本主体规则表（按优先级排列，长/具体的放前面）
+// blocked=true 表示该英语版本不参与组合
+const EDITION_BASES = [
+  // ── 需要优先匹配的复合词（防止被短词截断）──
+  {key:'全国人教',  tag:'人教',   blocked:false},
+  {key:'人教精通',  tag:'人教精通',blocked:true },  // 精通必须先于"人教"匹配
+  {key:'人教版精通',tag:'人教精通',blocked:true },
+  {key:'精通版',    tag:'人教精通',blocked:true },
+  {key:'沪教牛津',  tag:'沪教牛津',blocked:true },
+  // ── 普通版本 ──
+  {key:'人教',      tag:'人教',   blocked:false},
+  {key:'苏教',      tag:'苏教',   blocked:false},
+  {key:'北师',      tag:'北师',   blocked:false},
+  {key:'译林',      tag:'译林',   blocked:false},
+  {key:'外研',      tag:'外研',   blocked:false},
+  {key:'青岛',      tag:'青岛',   blocked:false},
+  {key:'冀教',      tag:'冀教',   blocked:false},
+  {key:'沪教',      tag:'沪教',   blocked:false},
+  // ── 黑名单英语版本 ──
+  {key:'闽教',      tag:'闽教',   blocked:true },
+  {key:'精通',      tag:'人教精通',blocked:true },
+  {key:'鲁科',      tag:'鲁科',   blocked:true },
+  {key:'剑桥',      tag:'剑桥',   blocked:true },
+  {key:'牛津',      tag:'牛津',   blocked:true },
+];
+
+// 解析版本字段 → 规格对象
+function parseEditionSpec(ed) {
+  // 1. 提取变体标记（五四制等）
+  let variant = '';
+  for (const v of EDITION_VARIANTS) {
+    if (ed.includes(v)) { variant = v; break; }
   }
-  // 非苏教语文 → 任意数学均可
-  return true;
+  // 2. 去掉括号内容和"版"字后匹配主体
+  const edClean = ed.replace(/[（(][^）)]*[）)]/g,'').replace(/版$/,'').trim();
+  let tag = '', blocked = false;
+  for (const b of EDITION_BASES) {
+    if (ed.includes(b.key) || edClean.includes(b.key)) {
+      tag = b.tag; blocked = b.blocked; break;
+    }
+  }
+  if (!tag) { tag = edClean || ed; blocked = false; }
+
+  return {
+    base:      tag,
+    variant:   variant,
+    specKey:   tag + (variant ? '+'+variant : ''),
+    isBlocked: blocked,
+    isWuSiZhi: variant === '五四制',
+    isSujiao:  tag === '苏教' || ed.includes('江苏'),
+    // 主流英语：非黑名单 且 是已知英语版本
+    isMainEng: !blocked && ['人教','译林','外研','北师'].includes(tag),
+  };
 }
 
-// 判断语文+英语是否允许配对
-function yuYingAllowed(yuEdition, yingEdition) {
-  if (isSujiaoYu(yuEdition)) {
-    // 苏教语文 → 只配译林英语
-    return yingEdition.includes('译林');
+// 两个版本是否属于同一规格（base相同 且 variant相同）
+function sameSpec(edA, edB) {
+  const a = parseEditionSpec(edA), b = parseEditionSpec(edB);
+  return a.base===b.base && a.variant===b.variant;
+}
+
+// ── 便捷判断 ─────────────────────────────────────
+function isSujiaoEd(ed)  { return parseEditionSpec(ed).isSujiao; }
+function isWuSiZhiEd(ed) { return parseEditionSpec(ed).isWuSiZhi; }
+function isEngBlocked(ed) { return !parseEditionSpec(ed).isMainEng; }
+
+// 传统语文可配对的数学：人教系→人教/北师，苏教系→苏教，五四制→同五四制规格
+function isTraditionalShu(shuEd) {
+  const s = parseEditionSpec(shuEd);
+  return ['人教','北师','苏教'].includes(s.base);
+}
+
+// ── 语文参与组合的条件 ──────────────────────────
+// 只有人教系/苏教系/五四制语文参与，黑名单语文不参与
+const YU_BLOCKED_TAGS = ['_blocked','闽教','鲁科'];
+function comboYuAllowed(yuEd) {
+  const s = parseEditionSpec(yuEd);
+  return !YU_BLOCKED_TAGS.includes(s.base);
+}
+
+// ── 核心配对（以语文为锚点）────────────────────
+function buildCombosForYu(yuw, shuList, engList, allYuList) {
+  const results = [];
+  const yuEd   = yuw.edition;
+  const yuSpec = parseEditionSpec(yuEd);
+
+  if (!comboYuAllowed(yuEd)) return results;
+
+  // ── 优先级1：五四制体系 ──────────────────────
+  if (yuSpec.isWuSiZhi) {
+    const wuSiShu = shuList.filter(s=>sameSpec(yuEd, s.edition));
+    for (const shu of wuSiShu) {
+      const wuSiEng = engList.filter(e=>sameSpec(shu.edition, e.edition) && !isEngBlocked(e.edition));
+      if (wuSiEng.length) {
+        for (const eng of wuSiEng) results.push([yuw, shu, eng]);
+      } else {
+        results.push([yuw, shu]);
+      }
+    }
+    return results;
   }
-  // 非苏教语文 → 配人教系英语（不配译林）
-  return !yingEdition.includes('译林');
+
+  // ── 优先级2：苏教系语文 ──────────────────────
+  if (yuSpec.isSujiao) {
+    const suShu = shuList.filter(s=>{
+      const ss=parseEditionSpec(s.edition);
+      return ss.isSujiao && !ss.isWuSiZhi;
+    });
+    for (const shu of suShu) {
+      results.push([yuw, shu]);
+      const yilinEng = engList.filter(e=>{
+        const es=parseEditionSpec(e.edition);
+        return es.base==='译林' && !es.isWuSiZhi && !es.isBlocked;
+      });
+      for (const eng of yilinEng) results.push([yuw, shu, eng]);
+    }
+    return results;
+  }
+
+  // ── 优先级3：人教系语文 ──────────────────────
+  const tradShu = shuList.filter(s=>{
+    const ss=parseEditionSpec(s.edition);
+    return isTraditionalShu(s.edition) && !ss.isWuSiZhi && !ss.isSujiao;
+  });
+  for (const shu of tradShu) {
+    results.push([yuw, shu]);
+    const validEng = engList.filter(e=>{
+      const es=parseEditionSpec(e.edition);
+      return !es.isWuSiZhi && es.base!=='译林' && es.base!=='外研' && !es.isBlocked && es.isMainEng;
+    });
+    for (const eng of validEng) results.push([yuw, shu, eng]);
+  }
+
+  // ── 优先级3b：人教语文+苏教数学 ─────────────
+  // 条件：当前语文是人教系，数据里没有苏教语文（即苏教数学没有专属语文可配）
+  const hasSujiaoYu = allYuList.some(y=>parseEditionSpec(y.edition).isSujiao);
+  if (!hasSujiaoYu) {
+    // 数据里没有苏教语文，人教语文可以和苏教数学组合
+    const suShu = shuList.filter(s=>{
+      const ss=parseEditionSpec(s.edition);
+      return ss.isSujiao && !ss.isWuSiZhi;
+    });
+    for (const shu of suShu) {
+      results.push([yuw, shu]);
+      // 译林英语
+      const yilinEng = engList.filter(e=>{
+        const es=parseEditionSpec(e.edition);
+        return es.base==='译林' && !es.isWuSiZhi && !es.isBlocked;
+      });
+      for (const eng of yilinEng) results.push([yuw, shu, eng]);
+    }
+  }
+
+  // ── 优先级4：其他版本数学（青岛/冀教等）────
+  const otherShu = shuList.filter(s=>{
+    const ss=parseEditionSpec(s.edition);
+    return !ss.isWuSiZhi && !ss.isSujiao && !isTraditionalShu(s.edition);
+  });
+  for (const shu of otherShu) {
+    results.push([yuw, shu]);
+    const sameEng = engList.filter(e=>
+      sameSpec(shu.edition, e.edition) && !isEngBlocked(e.edition)
+    );
+    for (const eng of sameEng) results.push([yuw, shu, eng]);
+  }
+
+  return results;
 }
 
 // ── 商家编码 ─────────────────────────────────
-function genMerchantCode(records, prefix) {
-  // 系列首字母（去重，最多取4字符）
-  const initials = [...new Set(records.map(r => getInitials(r.seriesName)).join(''))].join('').slice(0,4);
-  // 随机数字（补到总随机部分=9字符）
-  const randLen = Math.max(2, 9 - initials.length);
-  const rand = String(Math.floor(Math.pow(10,randLen-1) + Math.random()*(Math.pow(10,randLen)-Math.pow(10,randLen-1)))).slice(0,randLen);
-  return prefix + initials + rand;
+// 同批次3位随机英文（生成时固定，整批相同，用于区分不同批次）
+let _batchRandLetters = '';
+function getBatchRandLetters() {
+  if (!_batchRandLetters) {
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    _batchRandLetters = Array.from({length:3}, ()=>chars[Math.floor(Math.random()*26)]).join('');
+  }
+  return _batchRandLetters;
+}
+
+// 组合装序号（每次processCombo重置）
+let _comboSeq = 0;
+
+// 生成编码前缀（不含序号），序号在排序后统一赋值
+function genMerchantCodePrefix(records, prefix) {
+  const initials = [...new Set(records.map(r=>getInitials(r.seriesName)).join(''))].join('').slice(0,4);
+  const letters  = getBatchRandLetters();
+  return prefix + initials + letters;
 }
 
 // ── 系列名简化 ───────────────────────────────
@@ -594,6 +793,8 @@ function processCombo() {
 
   const records = raw.split(/\r?\n/).map(parseRecord).filter(r=>r&&r.parsed);
   if (!records.length) { showToast('没有可解析的数据'); return; }
+  // 每次生成重置批次随机字母（序号在排序后统一赋值）
+  _batchRandLetters = '';
 
   // 按 年级+学期 分组
   const groupMap = {};
@@ -612,29 +813,17 @@ function processCombo() {
       bySubj[r.subject].push(r);
     }
 
-    // 语+数：语文版本决定允许的数学版本
+    // 统一配对入口：以每个语文为锚点，按规则生成所有合法组合
     if (bySubj['语'] && bySubj['数']) {
+      const engList = bySubj['英'] || [];
       for (const yuw of bySubj['语']) {
-        const validShu = bySubj['数'].filter(s => yuShuAllowed(yuw.edition, s.edition));
-        for (const shu of validShu) {
-          const combo = [yuw, shu];
-          combos.push({ merchantCode: genMerchantCode(combo, prefix),
-                        comboName: buildComboName(combo, namePfx), items: combo });
-        }
-      }
-    }
-
-    // 语+数+英：语文版本同时决定允许的数学版本和英语版本
-    if (bySubj['语'] && bySubj['数'] && bySubj['英']) {
-      for (const yuw of bySubj['语']) {
-        const validShu  = bySubj['数'].filter(s => yuShuAllowed(yuw.edition, s.edition));
-        const validYing = bySubj['英'].filter(e => yuYingAllowed(yuw.edition, e.edition));
-        for (const shu of validShu) {
-          for (const eng of validYing) {
-            const combo = [yuw, shu, eng];
-            combos.push({ merchantCode: genMerchantCode(combo, prefix),
-                          comboName: buildComboName(combo, namePfx), items: combo });
-          }
+        const itemsList = buildCombosForYu(yuw, bySubj['数'], engList, bySubj['语']);
+        for (const items of itemsList) {
+          combos.push({
+            merchantCode: genMerchantCodePrefix(items, prefix), // 暂存前缀，排序后补序号
+            comboName:    buildComboName(items, namePfx),
+            items
+          });
         }
       }
     }
@@ -642,6 +831,11 @@ function processCombo() {
 
   // 按版本→年级→学期排序
   combos.sort(comboSort);
+
+  // 排序后按最终顺序赋递增序号
+  combos.forEach((c, i) => {
+    c.merchantCode = c.merchantCode + String(i+1).padStart(4,'0');
+  });
 
   comboGroups = combos;
   renderComboTable(combos);
@@ -848,125 +1042,128 @@ function parsePlatformSku(line) {
     if(m){skuId=m[1];skuName=m[2];}else{skuId='';skuName=line;}
   }
 
-  // ── 兼容多种格式 ────────────────────────────────
-  // 格式A（标准）：一年级上(26秋),数学计算能手(北师)
-  // 格式B（新）：【2026秋】一年级上册,【学霸默写】人教版
-  //              → 预处理成格式A再走统一流程
+  // ── 第一步：提取年级+学期 ────────────────────────
+  // 支持多种格式，统一找"X年级上/下"模式
+  // 先去掉【年份季节】标注、"册"字
+  let nameForGrade = skuName
+    .replace(/【\d{2,4}[秋春冬夏]】/g,'')
+    .replace(/（[^）]*）/g,'')   // 去掉（括号说明）
+    .replace(/([上下])册/g,'$1')
+    .trim();
 
-  let normalizedName = skuName;
-
-  // 格式B识别：含【年份秋/春】开头，或年级后跟"册"
-  if (/【\d{4}[秋春]】/.test(skuName) || /年级[上下]册/.test(skuName)) {
-    // 1. 去掉季节标注【2026秋】等
-    normalizedName = normalizedName.replace(/【\d{4}[秋春冬夏]】/g,'').trim();
-    // 2. 去掉"册"字（上册→上，下册→下）
-    normalizedName = normalizedName.replace(/([上下])册/g,'$1');
-    // 3. 把【科目描述】提取出来，拼到逗号后
-    //    如：一年级上,【学霸默写】人教版 → 一年级上,学霸默写人教版
-    normalizedName = normalizedName.replace(/【([^】]*)】/g,'$1');
-    // 4. 去掉"版"字（人教版→人教）
-    normalizedName = normalizedName.replace(/([^地方])(版)/g,'$1');
-  }
-
-  const gtm = normalizedName.match(/^([一二三四五六七八九])年级([上下])/);
-  if (!gtm) return {skuId,skuName,gradeNum:99,term:'上',subjects:[],editions:[],itemCount:0,subjectPart:'',parsed:false};
+  const gtm = nameForGrade.match(/([一二三四五六七八九])年级([上下])/);
+  if (!gtm) return {skuId,skuName,rawAfterComma:'',gradeNum:99,term:'上',subjects:[],editions:[],itemCount:0,subjectPart:'',parsed:false};
 
   const gradeNum = CN2N[gtm[1]]||99;
   const term     = gtm[2];
 
-  const commaIdx = normalizedName.indexOf(',');
-  const afterComma = commaIdx>=0 ? normalizedName.slice(commaIdx+1).trim() : '';
+  // ── 第二步：取逗号后的原始内容作为排序键和解析源 ──
+  const commaIdx = skuName.indexOf(',');
+  const rawAfterComma = commaIdx>=0 ? skuName.slice(commaIdx+1).trim() : skuName;
 
-  // ── 第一步：从【】标注里提取全局版本 ──────────
-  // 例：【3本江苏专用】→ '苏教江苏专用'（含"江苏"命中）
-  // 例：【2本】→ ''（没有版本词）
-  const bracketTagMatch = afterComma.match(/【([^】]*)】/g) || [];
+  // ── 第三步：规范化逗号后内容，统一提取科目+版本 ──
+  // 支持格式：
+  //   A: 数学计算能手(北师)
+  //   B: 【学霸默写】人教版
+  //   C: 语文人教版
+  //   D: 2本：语文+数学【北师版】
+  //   E: 3本：语文+英语【人教】+数学【北师】
+  //   F: 【2本】语文默写+数学计算苏教版
+  //   G: 语文+数学(人教)
+
+  // 清理：去掉本数标注"2本："/"【2本】"等，去掉"版"字
+  let cleaned = rawAfterComma
+    .replace(/【\d+本[^】]*】/g,'')   // 【2本】【3本江苏专用】
+    .replace(/\d+本[：:]\s*/g,'')      // 2本：
+    .replace(/([^地方省])(版)/g,'$1') // "版"字（保留"版本"里的版）
+    .trim();
+
+  // ── 第四步：拆分科目段，每段可能有内嵌【版本】或(版本) ──
+  // 先把每个科目段的内嵌版本提取出来
+  // 格式如：英语【人教】 → 科目=英语，版本=人教
+  //         数学【北师版】 → 科目=数学，版本=北师
+  //         数学计算苏教 → 科目=数学，版本=苏教（从文本提取）
+
+  // 先找末尾统一括号（格式A/G）
+  const trailingBracket = cleaned.match(/\(([^)）]+)\)\s*$/);
+  const trailingEd = trailingBracket ? trailingBracket[1].trim() : '';
+  if (trailingBracket) {
+    cleaned = cleaned.slice(0, cleaned.lastIndexOf('(')).trim();
+  }
+
+  // 按+拆分各科目段
+  const rawSegs = cleaned.split('+').map(s=>s.trim()).filter(Boolean);
+
+  const subjects=[], editions=[];
+  const segEditions=[]; // 每段自身提取的版本
+
+  for (const seg of rawSegs) {
+    // 提取内嵌【版本】
+    const inlineBracket = seg.match(/【([^】]*)】/);
+    const inlineEd = inlineBracket ? extractEditionFromDesc(inlineBracket[1]) : '';
+    // 去掉内嵌【】后的纯科目描述
+    const segClean = seg.replace(/【[^】]*】/g,'').trim();
+    // 从纯描述里提取版本
+    const descEd = extractEditionFromDesc(segClean);
+    // 本段最终版本：内嵌【】 > 描述里的版本词 > 末尾统一括号
+    const ownEd = inlineEd || descEd || trailingEd;
+    segEditions.push(ownEd);
+    subjects.push(descToSubject(segClean));
+  }
+
+  // ── 第五步：处理全局【】标注版本（用于补全无版本的段）──
+  // 从rawAfterComma里找不属于科目段的【】（如【北师版】【苏教版】）
+  const allBrackets = rawAfterComma.match(/【([^】]*)】/g) || [];
   let globalTagEdition = '';
-  for (const bt of bracketTagMatch) {
+  for (const bt of allBrackets) {
     const inner = bt.replace(/【|】/g,'');
+    if (/^\d+本/.test(inner)) continue; // 跳过"2本"这类
     const ed = extractEditionFromDesc(inner);
     if (ed) { globalTagEdition = ed; break; }
   }
+  const globalFallback = globalTagEdition || trailingEd || '';
 
-  // ── 第二步：去掉【】，处理干净内容 ────────────
-  const cleaned = afterComma.replace(/【[^】]*】/g,'').trim();
+  // ── 第六步：逐段赋最终版本 ─────────────────────
+  // 同时收集所有段的苏教版本（用于判断整体体系）
+  const sujiaoInAny = segEditions.some(e=>e && isSuJiaoEd(e)) || isSuJiaoEd(globalFallback);
 
-  // 单本末尾括号版本，如(人教)/(北师)
-  const edBracket = cleaned.match(/\(([^)]+)\)\s*$/);
-  const bracketEdition = edBracket ? edBracket[1].trim() : '';
-
-  // 科目描述部分（去掉末尾括号）
-  const subjectPart = edBracket
-    ? cleaned.slice(0, cleaned.lastIndexOf('(')).trim()
-    : cleaned;
-
-  // ── 第三步：逐段提取版本 ──────────────────────
-  const subjectParts = subjectPart.split('+').map(s=>s.trim()).filter(Boolean);
-  const segEditions  = subjectParts.map(seg => extractEditionFromDesc(seg));
-
-  // 【】标注的全局版本（如【3本江苏专用】→ 苏教），用于补全没有版本的段
-  // 但不能用它覆盖语文的版本判断——语文只看自身段 + 【】标注
-  const globalFallback = globalTagEdition || bracketEdition || '';
-
-  // ── 第四步：逐段赋版本 ─────────────────────────
-  const subjects = [];
-  const editions = [];
-  for (let i=0; i<subjectParts.length; i++) {
-    const seg  = subjectParts[i];
-    const subj = descToSubject(seg);
-    subjects.push(subj);
-
-    // 本段自身提取的版本
+  for (let i=0;i<subjects.length;i++) {
+    const subj  = subjects[i];
     const ownEd = segEditions[i];
-
     let segEd;
-    if (subj === '语') {
-      // 语文版本：只看本段自身 和 【】标注，不受其他科目段影响
-      // 本段含苏教/江苏 OR 【】标注含苏教/江苏 → 苏教系语文
-      // 否则 → 人教（普通语文）
-      const yuSrcEd = ownEd || globalTagEdition;
-      segEd = (yuSrcEd && isSuJiaoEd(yuSrcEd)) ? yuSrcEd : '人教';
 
-    } else if (subj === '英' && !ownEd && subjectParts.length > 1) {
-      // 多本英语段无版本：根据数学段的版本推断
-      // 找数学段的版本
-      const shuIdx = subjectParts.findIndex((_,j)=>descToSubject(subjectParts[j])==='数');
+    if (subj==='语') {
+      // 语文：只看本段自身版本词（ownEd）来决定是否苏教系
+      // globalTagEdition 可能来自数学段的苏教标注，不能传染给语文
+      // 例：语文+数学【苏教版】→ 语文段自身无版本 → 人教（普通语文）
+      //     语文苏教+数学 → 语文段自身含苏教 → 苏教语文
+      segEd = (ownEd && isSuJiaoEd(ownEd)) ? ownEd : '人教';
+    } else if (subj==='英' && !ownEd && subjects.length>1) {
+      // 多本英语无版本：按数学段版本推断
+      const shuIdx = subjects.findIndex(s=>s==='数');
       const shuEd  = shuIdx>=0 ? (segEditions[shuIdx]||globalFallback) : globalFallback;
       segEd = isSuJiaoEd(shuEd) ? '译林' : '人教';
-
     } else {
-      // 数学/英语单本/其他：本段版本 > 全局fallback
       segEd = ownEd || globalFallback;
     }
-
     editions.push(segEd);
   }
 
   const itemCount = subjects.length;
-  const mathIdx = subjects.indexOf('数');
-  const edition = mathIdx>=0 ? editions[mathIdx] : (editions[0]||globalEdition);
+  const mathIdx   = subjects.indexOf('数');
+  const edition   = mathIdx>=0 ? editions[mathIdx] : (editions[0]||globalFallback);
+  const subjectPart = rawSegs.join('+');
 
-  return {skuId, skuName, gradeNum, term, subjectPart, subjects, editions, edition, itemCount, parsed:true};
+  return {skuId, skuName, rawAfterComma, gradeNum, term, subjectPart, subjects, editions, edition, itemCount, parsed:true};
 }
 
-// 平台SKU排序：学期上/下 → 本数(单品先) → 科目优先级 → 版本字典序 → 年级
+// 平台SKU排序：逗号后内容（字典序）→ 年级
 function platformSort(a, b) {
-  // 1. 学期
-  const ta=a.term==='上'?0:1, tb=b.term==='上'?0:1;
-  if (ta!==tb) return ta-tb;
-  // 2. 本数（单品1本 < 组合2本 < 组合3本）
-  if (a.itemCount!==b.itemCount) return a.itemCount-b.itemCount;
-  // 3. 科目优先级（取主科目：单品取subjects[0]，多本取数学版本所在科目）
-  const getMainSubj = p => {
-    const mi=p.subjects.indexOf('数'); return mi>=0 ? p.subjects[mi] : (p.subjects[0]||'其他');
-  };
-  const pa=SUBJECT_PRIORITY[getMainSubj(a)]??99, pb=SUBJECT_PRIORITY[getMainSubj(b)]??99;
-  if (pa!==pb) return pa-pb;
-  // 4. 版本字典序（数学版本）
-  const ec=(a.edition||'').localeCompare(b.edition||'','zh');
-  if (ec!==0) return ec;
-  // 5. 年级
-  return a.gradeNum-b.gradeNum;
+  // 1. 逗号后原始内容字典序（相同类型聚在一起）
+  const rc = (a.rawAfterComma||'').localeCompare(b.rawAfterComma||'','zh');
+  if (rc!==0) return rc;
+  // 2. 年级
+  return a.gradeNum - b.gradeNum;
 }
 
 // ── 核心匹配 ─────────────────────────────────────
@@ -977,19 +1174,20 @@ function matchPlatformSku(p) {
   const results=[];
 
   if (p.itemCount===1) {
-    // ── 单品：年级+学期+科目+版本精准匹配 ──
+    // ── 单品：年级+学期+科目+规格精准匹配（用sameSpec防止五四制误匹普通版）──
     const subj = p.subjects[0];
     const edKw = p.editions[0] || p.edition;
     for (const r of sortRecords) {
       if (!r.parsed) continue;
       if (r.gradeNum!==p.gradeNum || r.term!==p.term) continue;
       if (subj!=='其他' && r.subject!==subj) continue;
-      if (!editionMatch(edKw, r.edition)) continue;
+      // 用规格匹配：base+variant必须相同，人教≠人教五四制
+      if (!sameSpec(edKw, r.edition)) continue;
       results.push({type:'单品', code:r.sku, name:r.cleanName||r.name});
     }
 
   } else {
-    // ── 组合装：本数+科目集合+年级+学期+各科版本 全部精准匹配 ──
+    // ── 组合装：本数+科目集合+年级+学期+各科规格 全部精准匹配 ──
     const pSubjSet = [...p.subjects].sort().join(',');
 
     for (const c of comboGroups) {
@@ -1003,19 +1201,40 @@ function matchPlatformSku(p) {
       const refItem = c.items.find(i=>i.subject==='数') || c.items[0];
       if (refItem.gradeNum!==p.gradeNum || refItem.term!==p.term) continue;
 
-      // 逐科验证版本：平台每个科目段都有对应版本，逐一和组合装里该科单品对比
+      // 逐科验证规格（用sameSpec，防止五四制/普通版混匹）
       let versionOk = true;
       for (let i=0; i<p.subjects.length; i++) {
         const pSubj = p.subjects[i];
         const pEd   = p.editions[i] || p.edition;
-        if (!pEd) continue; // 无版本信息则跳过该科验证
+        if (!pEd) continue;
         const cItem = c.items.find(ci=>ci.subject===pSubj);
         if (!cItem) { versionOk=false; break; }
-        if (!editionMatch(pEd, cItem.edition)) { versionOk=false; break; }
+        if (!sameSpec(pEd, cItem.edition)) { versionOk=false; break; }
       }
       if (!versionOk) continue;
 
       results.push({type:`组合装${p.itemCount}本`, code:c.merchantCode, name:c.comboName});
+    }
+
+    // 搜索历史组合装：完全复用当次生成的匹配逻辑（方式A），要求4列完整数据
+    const currentCodes = new Set(comboGroups.map(c=>c.merchantCode));
+    for (const c of historyComboGroups) {
+      if (currentCodes.has(c.merchantCode)) continue;
+      if (c.items.length !== p.itemCount) continue;
+      const cSubjSet = c.items.map(i=>i.subject).sort().join(',');
+      if (cSubjSet !== pSubjSet) continue;
+      const refItem = c.items.find(i=>i.subject==='数') || c.items[0];
+      if (!refItem || refItem.gradeNum!==p.gradeNum || refItem.term!==p.term) continue;
+      let versionOk = true;
+      for (let i=0; i<p.subjects.length; i++) {
+        const pSubj=p.subjects[i], pEd=p.editions[i]||p.edition;
+        if (!pEd) continue;
+        const cItem=c.items.find(ci=>ci.subject===pSubj);
+        if (!cItem){versionOk=false;break;}
+        if (!sameSpec(pEd,cItem.edition)){versionOk=false;break;}
+      }
+      if (!versionOk) continue;
+      results.push({type:`历史组合装${p.itemCount}本`, code:c.merchantCode, name:c.comboName});
     }
   }
 
@@ -1023,8 +1242,39 @@ function matchPlatformSku(p) {
 }
 
 let matchRecords = [];
+let historyComboGroups = []; // 从历史组合装输入框解析的组合装
+
+// 解析历史组合装输入（格式：商家编码	组合装名称	单品编码	单品名称）
+function loadHistoryCombo() {
+  const raw = document.getElementById('history-combo-input').value.trim();
+  if (!raw) { showToast('请先粘贴历史组合装数据'); return; }
+  const lines = raw.split(/\r?\n/).filter(l=>l.trim());
+  const map = {};
+  for (const line of lines) {
+    const parts = line.split('\t');
+    if (parts.length < 2) continue;
+    const code = parts[0].trim();
+    const name = parts[1].trim();
+    const skuId = parts[2]?.trim() || '';
+    const skuName = parts[3]?.trim() || '';
+    if (!map[code]) map[code] = { merchantCode:code, comboName:name, items:[] };
+    if (skuId) {
+      // 尝试从单品名称解析科目和版本（复用parseRecord）
+      const parsed = parseRecord(skuId + '\t' + skuName);
+      map[code].items.push(parsed || {sku:skuId, name:skuName, subject:'其他', gradeNum:99, term:'上', edition:'', parsed:false});
+    }
+  }
+  historyComboGroups = Object.values(map);
+  document.getElementById('history-stat').innerHTML =
+    `已载入 <strong>${historyComboGroups.length}</strong> 个历史组合装`;
+  showToast(`✓ 载入 ${historyComboGroups.length} 个历史组合装`);
+}
 
 function processMatch() {
+  // 自动解析历史组合装输入框（无需手动点载入）
+  const historyRaw = document.getElementById('history-combo-input').value.trim();
+  if (historyRaw) loadHistoryCombo();
+
   const raw = document.getElementById('match-input').value;
   const lines = raw.split(/\r?\n/).map(parsePlatformSku).filter(Boolean);
   lines.sort(platformSort);
