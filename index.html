@@ -113,29 +113,20 @@
 <div class="page">
 
   <!-- Tab header -->
-  <!-- 天气栏 -->
-  <div class="weather-bar">
-    <div class="weather-card" id="weather-widget">
-      <div class="weather-today">
-        <span id="w-icon" style="font-size:22px">⛅</span>
-        <div>
-          <div><span class="weather-temp" id="w-temp">--</span> <span id="w-desc" class="weather-desc"></span></div>
-          <div class="weather-city" id="w-city">徐州</div>
-        </div>
-      </div>
-      <div class="weather-divider"></div>
-      <div class="weather-forecast" id="w-forecast">
-        <div class="weather-day"><div class="day-label">--</div><div class="day-icon">⛅</div><div class="day-temp">--</div></div>
-        <div class="weather-day"><div class="day-label">--</div><div class="day-icon">⛅</div><div class="day-temp">--</div></div>
-        <div class="weather-day"><div class="day-label">--</div><div class="day-icon">⛅</div><div class="day-temp">--</div></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="tabs">
+  <div class="tabs" style="display:flex;align-items:flex-end">
     <button class="tab active" onclick="switchTab('sort')">📋 单品排序</button>
     <button class="tab" onclick="switchTab('combo')">📦 组合装生成</button>
     <button class="tab" onclick="switchTab('match')">🔗 平台SKU匹配</button>
+    <div style="flex:1"></div>
+    <!-- 天气 -->
+    <div id="weather-widget" style="display:flex;align-items:center;gap:10px;padding:4px 14px 6px;font-size:13px;color:var(--text)">
+      <span id="w-icon" style="font-size:20px">⛅</span>
+      <span class="weather-temp" id="w-temp" style="font-size:16px;font-weight:700;color:var(--accent)">--</span>
+      <span id="w-desc" style="color:var(--muted);font-size:12px"></span>
+      <span id="w-city" style="color:var(--muted);font-size:12px">徐州</span>
+      <span style="color:var(--border);margin:0 2px">|</span>
+      <div id="w-forecast" style="display:flex;gap:10px"></div>
+    </div>
   </div>
 
   <!-- ═══ TAB 1: 单品排序 ═══ -->
