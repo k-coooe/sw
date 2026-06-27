@@ -364,24 +364,72 @@ function parseRecord(line) {
 
   for (let i=parts.length-1; i>=0; i--) {
     const seg = parts[i];
-    const m = seg.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}]?)([上下])$`));
-    if (m) {
-      gradeNum = CN2N[m[1]]||99;
-      const sc = m[2];
-      term = m[3];
+
+    // 格式A：标准格式 [年级][科目?][上下]，如"一数上"、"一上"
+    const mA = seg.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}]?)([上下])$`));
+    // 格式B：暑假衔接格式 [年级]升[年级]，如"五升六"，科目在下一段或从系列名推断
+    const mB = seg.match(/^([一二三四五])升([二三四五六])$/);
+    // 格式C：暑假衔接+科目 [年级]升[年级]-[科目]，分开两段时科目在后续段
+    // 也可能写成"五升六英语"（连在一起）
+    const mC = seg.match(new RegExp(`^([一二三四五])升([二三四五六])([${SUBJ_CHARS}]?)$`));
+
+    if (mA) {
+      gradeNum = CN2N[mA[1]]||99;
+      const sc = mA[2];
+      term = mA[3];
       edition    = i>0 ? parts[i-1] : '';
       seriesName = i>1 ? parts[i-2] : (i>0 ? parts[0] : '');
-
       if (sc !== '' && '语数英政科'.includes(sc)) {
         subject = sc;
       } else if (sc !== '') {
-        subject = '科'; // 理化史地物生 → 综合
+        subject = '科';
       } else {
-        // 年级段没有科目字（如"一上"）→ 从系列名推断
         const inferred = inferSubjectFromSeries(seriesName + ' ' + parts.slice(0,i).join(' '));
         subject = inferred !== '其他' ? inferred : '科';
       }
+      parsed = true;
+      break;
 
+    } else if (mC && mC[3]) {
+      // 五升六英语 → 年级=五，term='上'（暑假默认），科目从mC[3]
+      gradeNum   = CN2N[mC[1]]||99;
+      term       = '上';
+      edition    = i>0 ? parts[i-1] : '';
+      seriesName = i>1 ? parts[i-2] : (i>0 ? parts[0] : '');
+      const sc = mC[3];
+      subject = ('语数英政科'.includes(sc)) ? sc : '科';
+      parsed = true;
+      break;
+
+    } else if (mB) {
+      // 五升六（独立段）
+      gradeNum = CN2N[mB[1]]||99;
+      term     = '上';
+
+      // 版本和系列名：判断年级段是否在最后
+      // 格式X：26秋-系列-版本-三升四（年级在末尾，版本在前）→ edition=parts[i-1]
+      // 格式Y：26秋-系列-三升四-版本（年级在中间，版本在后）→ edition=parts[i+1]
+      const afterSeg = i+1 < parts.length ? parts[i+1] : '';
+      const beforeSeg = i>0 ? parts[i-1] : '';
+
+      // 判断后面一段是否是版本关键词（含已知版本词则认为是版本在后）
+      const isEditionAfter = afterSeg && extractEditionFromDesc(afterSeg);
+
+      if (isEditionAfter) {
+        // 格式Y：版本在年级后
+        edition    = afterSeg;
+        seriesName = i>0 ? beforeSeg : '';
+      } else {
+        // 格式X：版本在年级前（标准格式）
+        edition    = beforeSeg;
+        seriesName = i>1 ? parts[i-2] : (i>0 ? parts[0] : '');
+      }
+
+      // 科目：从系列名推断（口算→数，默写→语，英语→英）
+      const inferred = inferSubjectFromSeries(
+        seriesName + ' ' + parts.slice(0,i).join(' ') + ' ' + afterSeg
+      );
+      subject = inferred !== '其他' ? inferred : '其他';
       parsed = true;
       break;
     }
@@ -394,11 +442,18 @@ function parseRecord(line) {
 //  排序逻辑：版本→科目→年级→学期→SKU
 // ════════════════════════════════════════════
 function defaultSort(a,b) {
-  const ec = a.edition.localeCompare(b.edition,'zh');
-  if (ec!==0) return ec;
+  // 1. 科目优先级
   const pa=SUBJECT_PRIORITY[a.subject]??99, pb=SUBJECT_PRIORITY[b.subject]??99;
   if (pa!==pb) return pa-pb;
+  // 2. 版本
+  const ec = a.edition.localeCompare(b.edition,'zh');
+  if (ec!==0) return ec;
+  // 3. 系列名（同科目同版本时，系列聚在一起）
+  const sc = (a.seriesName||'').localeCompare(b.seriesName||'','zh');
+  if (sc!==0) return sc;
+  // 4. 年级
   if (a.gradeNum!==b.gradeNum) return a.gradeNum-b.gradeNum;
+  // 5. 学期
   const ta=a.term==='上'?0:1, tb=b.term==='上'?0:1;
   if (ta!==tb) return ta-tb;
   return a.sku.localeCompare(b.sku,undefined,{numeric:true});
@@ -1816,29 +1871,15 @@ async function fetchWeather(lat, lon, city) {
 
 async function initWeather() {
   try {
-    // 先用徐州默认坐标立刻显示，再尝试定位
     await fetchWeather(DEFAULT_LAT, DEFAULT_LON, DEFAULT_CITY);
-  } catch(e) {}
-
-  // 尝试浏览器定位（HTTPS环境）
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(async pos=>{
-      const {latitude:lat, longitude:lon} = pos.coords;
-      let city = DEFAULT_CITY;
-      try {
-        const gr = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=zh`);
-        const gd = await gr.json();
-        city = gd.address?.city || gd.address?.town || gd.address?.county || city;
-      } catch(e){}
-      try { await fetchWeather(lat, lon, city); } catch(e){}
-    }, ()=>{}, {timeout:8000});
+  } catch(e) {
+    document.getElementById('w-desc').textContent = '天气获取失败';
   }
 }
 
-window.addEventListener('DOMContentLoaded', ()=>{
-  initWeather();
-  setInterval(initWeather, 30*60*1000);
-});
+// script在body底部，DOM已就绪，直接调用
+initWeather();
+setInterval(initWeather, 30*60*1000);
 
 let toastTimer;
 function showToast(msg){
