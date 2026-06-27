@@ -115,9 +115,20 @@
   <!-- Tab header -->
   <!-- 天气栏 -->
   <div class="weather-bar">
-    <div class="weather-info" id="weather-widget">
-      <span>⛅</span>
-      <span id="weather-text" style="color:var(--muted)">获取天气中…</span>
+    <div class="weather-card" id="weather-widget">
+      <div class="weather-today">
+        <span id="w-icon" style="font-size:22px">⛅</span>
+        <div>
+          <div><span class="weather-temp" id="w-temp">--</span> <span id="w-desc" class="weather-desc"></span></div>
+          <div class="weather-city" id="w-city">徐州</div>
+        </div>
+      </div>
+      <div class="weather-divider"></div>
+      <div class="weather-forecast" id="w-forecast">
+        <div class="weather-day"><div class="day-label">--</div><div class="day-icon">⛅</div><div class="day-temp">--</div></div>
+        <div class="weather-day"><div class="day-label">--</div><div class="day-icon">⛅</div><div class="day-temp">--</div></div>
+        <div class="weather-day"><div class="day-label">--</div><div class="day-icon">⛅</div><div class="day-temp">--</div></div>
+      </div>
     </div>
   </div>
 
@@ -1681,7 +1692,7 @@ function exportMatchCSV() {
 }
 
 // ════════════════════════════════════════════
-//  天气组件
+//  天气组件（默认徐州，支持定位）
 // ════════════════════════════════════════════
 const WMO_ICONS = {
   0:'☀️',1:'🌤️',2:'⛅',3:'☁️',
@@ -1701,67 +1712,64 @@ const WMO_DESC = {
   80:'小阵雨',81:'中阵雨',82:'雷阵雨',
   95:'雷暴',96:'雷暴',99:'强雷暴',
 };
+// 徐州默认坐标
+const DEFAULT_LAT = 34.2044, DEFAULT_LON = 117.2851, DEFAULT_CITY = '徐州';
+const WEEK = ['日','一','二','三','四','五','六'];
+
+async function fetchWeather(lat, lon, city) {
+  const wRes = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,weathercode` +
+    `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
+    `&timezone=auto&forecast_days=4`
+  );
+  const d = await wRes.json();
+
+  // 今日
+  const temp = Math.round(d.current.temperature_2m);
+  const code = d.current.weathercode;
+  document.getElementById('w-icon').textContent = WMO_ICONS[code]||'🌡️';
+  document.getElementById('w-temp').textContent = temp + '°C';
+  document.getElementById('w-desc').textContent = WMO_DESC[code]||'';
+  document.getElementById('w-city').textContent = city;
+
+  // 未来3天（indexes 1,2,3）
+  const fc = document.getElementById('w-forecast');
+  fc.innerHTML = d.daily.time.slice(1,4).map((dateStr,i)=>{
+    const dt   = new Date(dateStr);
+    const dow  = WEEK[dt.getDay()];
+    const wc   = d.daily.weathercode[i+1];
+    const tmax = Math.round(d.daily.temperature_2m_max[i+1]);
+    const tmin = Math.round(d.daily.temperature_2m_min[i+1]);
+    return `<div class="weather-day">
+      <div class="day-label">周${dow}</div>
+      <div class="day-icon">${WMO_ICONS[wc]||'⛅'}</div>
+      <div class="day-temp">${tmin}~${tmax}°</div>
+    </div>`;
+  }).join('');
+}
 
 async function initWeather() {
-  const el = document.getElementById('weather-text');
   try {
-    // 1. 获取位置
-    const pos = await new Promise((res,rej)=>
-      navigator.geolocation.getCurrentPosition(res, rej, {timeout:6000})
-    );
-    const {latitude:lat, longitude:lon} = pos.coords;
+    // 先用徐州默认坐标立刻显示，再尝试定位
+    await fetchWeather(DEFAULT_LAT, DEFAULT_LON, DEFAULT_CITY);
+  } catch(e) {}
 
-    // 2. 反向地理编码（获取城市名）
-    let cityName = '';
-    try {
-      const geoRes = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=zh`
-      );
-      const geoData = await geoRes.json();
-      const addr = geoData.address || {};
-      cityName = addr.city || addr.town || addr.county || addr.state || '';
-    } catch(e) {}
-
-    // 3. 获取天气
-    const wRes = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-      `&current=temperature_2m,weathercode&timezone=auto&forecast_days=1`
-    );
-    const wData = await wRes.json();
-    const temp = Math.round(wData.current.temperature_2m);
-    const code = wData.current.weathercode;
-    const icon = WMO_ICONS[code] || '🌡️';
-    const desc = WMO_DESC[code] || '';
-
-    el.innerHTML = `${icon} <span class="weather-temp">${temp}°C</span>` +
-      `<span>${desc}</span>` +
-      (cityName ? `<span class="weather-city">· ${cityName}</span>` : '');
-
-  } catch(e) {
-    // 定位失败：用IP定位兜底
-    try {
-      const ipRes = await fetch('https://ipapi.co/json/');
-      const ipData = await ipRes.json();
-      const wRes = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${ipData.latitude}&longitude=${ipData.longitude}` +
-        `&current=temperature_2m,weathercode&timezone=auto&forecast_days=1`
-      );
-      const wData = await wRes.json();
-      const temp = Math.round(wData.current.temperature_2m);
-      const code = wData.current.weathercode;
-      const icon = WMO_ICONS[code] || '🌡️';
-      const desc = WMO_DESC[code] || '';
-      const city = ipData.city || '';
-      el.innerHTML = `${icon} <span class="weather-temp">${temp}°C</span>` +
-        `<span>${desc}</span>` +
-        (city ? `<span class="weather-city">· ${city}</span>` : '');
-    } catch(e2) {
-      el.textContent = '天气获取失败';
-    }
+  // 尝试浏览器定位（HTTPS环境）
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const {latitude:lat, longitude:lon} = pos.coords;
+      let city = DEFAULT_CITY;
+      try {
+        const gr = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=zh`);
+        const gd = await gr.json();
+        city = gd.address?.city || gd.address?.town || gd.address?.county || city;
+      } catch(e){}
+      try { await fetchWeather(lat, lon, city); } catch(e){}
+    }, ()=>{}, {timeout:8000});
   }
 }
 
-// 页面加载后初始化天气，每30分钟刷新
 window.addEventListener('DOMContentLoaded', ()=>{
   initWeather();
   setInterval(initWeather, 30*60*1000);
