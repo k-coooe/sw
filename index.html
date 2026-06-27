@@ -1708,36 +1708,40 @@ const DEFAULT_LAT = 34.2044, DEFAULT_LON = 117.2851, DEFAULT_CITY = '徐州';
 const WEEK = ['日','一','二','三','四','五','六'];
 
 async function fetchWeather(lat, lon, city) {
-  const wRes = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-    `&current=temperature_2m,weathercode` +
+  // Open-Meteo API：current_weather用于当前，daily用于预报
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current_weather=true` +
     `&daily=weathercode,temperature_2m_max,temperature_2m_min` +
-    `&timezone=auto&forecast_days=4`
-  );
+    `&timezone=Asia%2FShanghai&forecast_days=4`;
+  const wRes = await fetch(url);
+  if (!wRes.ok) throw new Error('weather api error');
   const d = await wRes.json();
 
-  // 今日
-  const temp = Math.round(d.current.temperature_2m);
-  const code = d.current.weathercode;
-  document.getElementById('w-icon').textContent = WMO_ICONS[code]||'🌡️';
+  // 今日（current_weather）
+  const cw   = d.current_weather;
+  const temp = Math.round(cw.temperature);
+  const code = cw.weathercode;
+  document.getElementById('w-icon').textContent = WMO_ICONS[code] || '🌡️';
   document.getElementById('w-temp').textContent = temp + '°C';
-  document.getElementById('w-desc').textContent = WMO_DESC[code]||'';
+  document.getElementById('w-desc').textContent = WMO_DESC[code] || '';
   document.getElementById('w-city').textContent = city;
 
-  // 未来3天（indexes 1,2,3）
+  // 未来3天（daily index 1,2,3；index 0是今天）
   const fc = document.getElementById('w-forecast');
-  fc.innerHTML = d.daily.time.slice(1,4).map((dateStr,i)=>{
-    const dt   = new Date(dateStr);
-    const dow  = WEEK[dt.getDay()];
-    const wc   = d.daily.weathercode[i+1];
-    const tmax = Math.round(d.daily.temperature_2m_max[i+1]);
-    const tmin = Math.round(d.daily.temperature_2m_min[i+1]);
-    return `<div class="weather-day">
-      <div class="day-label">周${dow}</div>
-      <div class="day-icon">${WMO_ICONS[wc]||'⛅'}</div>
-      <div class="day-temp">${tmin}~${tmax}°</div>
-    </div>`;
-  }).join('');
+  if (d.daily && d.daily.time) {
+    fc.innerHTML = d.daily.time.slice(1, 4).map((dateStr, i) => {
+      const dt   = new Date(dateStr + 'T12:00:00');
+      const dow  = WEEK[dt.getDay()];
+      const wc   = d.daily.weathercode[i + 1];
+      const tmax = Math.round(d.daily.temperature_2m_max[i + 1]);
+      const tmin = Math.round(d.daily.temperature_2m_min[i + 1]);
+      return `<div class="weather-day">
+        <div class="day-label">周${dow}</div>
+        <div class="day-icon">${WMO_ICONS[wc] || '⛅'}</div>
+        <div class="day-temp">${tmin}~${tmax}°</div>
+      </div>`;
+    }).join('');
+  }
 }
 
 async function initWeather() {
