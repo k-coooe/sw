@@ -113,6 +113,14 @@
 <div class="page">
 
   <!-- Tab header -->
+  <!-- 天气栏 -->
+  <div class="weather-bar">
+    <div class="weather-info" id="weather-widget">
+      <span>⛅</span>
+      <span id="weather-text" style="color:var(--muted)">获取天气中…</span>
+    </div>
+  </div>
+
   <div class="tabs">
     <button class="tab active" onclick="switchTab('sort')">📋 单品排序</button>
     <button class="tab" onclick="switchTab('combo')">📦 组合装生成</button>
@@ -271,9 +279,9 @@
             <th>平台SKU编码</th>
             <th>平台SKU名称</th>
             <th>匹配类型</th>
-            <th>系列</th>
             <th>匹配编码</th>
             <th>匹配名称</th>
+            <th>系列</th>
           </tr></thead>
           <tbody id="match-tbody">
             <tr><td colspan="5" class="empty"><div class="icon">🔗</div>填入平台SKU后点击「解析并匹配」</td></tr>
@@ -1596,35 +1604,36 @@ function processMatch() {
     const rowCount = Math.max(1, hits.length);
     if (hits.length) totalMatched++;
 
-    hits.forEach((h,hi)=>{
-      const isFirst = hi===0;
-      const divider = (pi>0 && hi===0) ? ' group-divider' : '';
-      const rowClass = pi%2===0 ? 'combo-row-a':'combo-row-b';
-      const typeBadge = h.type==='单品'
-        ? `<span class="badge b数" style="background:#e3f2fd;color:#1565c0">${h.type}</span>`
-        : `<span class="badge b科" style="background:#ede7f6;color:#4527a0">${h.type}</span>`;
-      const SERIES_COLORS = {'A':'background:#e0f2fe;color:#075985','B':'background:#fef3c7;color:#92400e','A+B':'background:#ede7f6;color:#4527a0','历史':'background:#f3f4f6;color:#374151'};
-      const sc = SERIES_COLORS[h._series||'A'] || '';
-      const seriesBadge = h._series ? `<span class="badge" style="${sc};white-space:nowrap">${esc(h._series)}</span>` : '';
-      rows.push(`<tr class="${rowClass}${divider}">
-        ${isFirst ? `<td rowspan="${rowCount}"><code>${esc(p.skuId)}</code></td>
-        <td rowspan="${rowCount}">${esc(p.skuName)}</td>` : ''}
-        <td>${typeBadge}</td>
-        <td>${seriesBadge}</td>
-        <td><code>${esc(h.code)}</code></td>
-        <td>${esc(h.name)}</td>
-      </tr>`);
-    });
-
+    const SERIES_COLORS = {'A':'background:#e0f2fe;color:#075985','B':'background:#fef3c7;color:#92400e','A+B':'background:#ede7f6;color:#4527a0','历史':'background:#f3f4f6;color:#374151'};
     if (!hits.length) {
       const divider = pi>0?' group-divider':'';
       const rowClass = pi%2===0?'combo-row-a':'combo-row-b';
       rows.push(`<tr class="${rowClass}${divider}">
         <td><code>${esc(p.skuId)}</code></td>
         <td>${esc(p.skuName)}</td>
-        <td colspan="4" style="color:var(--warn);font-size:12px">⚠ 未找到匹配</td>
+        <td style="color:var(--warn);font-size:12px">⚠ 未找到匹配</td>
+        <td>-</td><td>-</td><td>-</td>
       </tr>`);
     }
+
+    hits.forEach((h,hi)=>{
+      const divider = (pi>0 && hi===0) ? ' group-divider' : '';
+      const rowClass = pi%2===0 ? 'combo-row-a':'combo-row-b';
+      const typeBadge = h.type==='单品'
+        ? `<span class="badge b数" style="background:#e3f2fd;color:#1565c0">${h.type}</span>`
+        : `<span class="badge b科" style="background:#ede7f6;color:#4527a0">${h.type}</span>`;
+      const sc = SERIES_COLORS[h._series||''] || '';
+      const seriesBadge = h._series ? `<span class="badge" style="${sc};white-space:nowrap">${esc(h._series)}</span>` : '-';
+      // 每行都输出完整6列，不用rowspan（保证导出列对齐）
+      rows.push(`<tr class="${rowClass}${divider}">
+        <td><code>${esc(p.skuId)}</code></td>
+        <td>${esc(p.skuName)}</td>
+        <td>${typeBadge}</td>
+        <td><code>${esc(h.code)}</code></td>
+        <td>${esc(h.name)}</td>
+        <td>${seriesBadge}</td>
+      </tr>`);
+    });
   });
 
   tbody.innerHTML = rows.join('');
@@ -1647,71 +1656,116 @@ function getMatchDataRows() {
 }
 
 function copyMatchResult() {
-  const rows = Array.from(document.querySelectorAll('#match-tbody tr'))
-    .filter(tr=>!tr.querySelector('.empty'));
+  const rows = Array.from(document.querySelectorAll('#match-tbody tr')).filter(tr=>!tr.querySelector('.empty'));
   if (!rows.length){showToast('没有数据可复制');return;}
   const header='平台SKU编码\t平台SKU名称\t匹配类型\t匹配编码\t匹配名称\t系列';
-  // rowspan处理：记录当前skuId/skuName
-  let lastId='', lastName='';
   const body=rows.map(tr=>{
-    const cells=tr.cells;
-    let skuId, skuName, type, code, name;
-    if(cells.length===5){
-      skuId=cells[0].textContent.trim(); lastName=skuId;
-      skuName=cells[1].textContent.trim(); lastName=skuName;
-      lastId=skuId;
-      type=cells[2].textContent.trim();
-      code=cells[3].textContent.trim();
-      name=cells[4].textContent.trim();
-    } else if(cells.length===3){
-      // 未匹配行（colspan=3）
-      skuId=cells[0].textContent.trim();
-      skuName=cells[1].textContent.trim();
-      type='未匹配'; code=''; name='';
-    } else {
-      // rowspan续行（3 cells: type,code,name）
-      skuId=lastId; skuName=lastName;
-      type=cells[0].textContent.trim();
-      code=cells[1].textContent.trim();
-      name=cells[2].textContent.trim();
-    }
-    const seriesCell = cells.length>5 ? cells[5].textContent.trim() : '';
-    return [skuId,skuName,type,code,name,seriesCell].join('\t');
-  }).join('\n');
+    const c=tr.cells;
+    if(c.length<6) return '';
+    return [c[0],c[1],c[2],c[3],c[4],c[5]].map(td=>td.textContent.trim()).join('\t');
+  }).filter(Boolean).join('\n');
   doClipboard(header+'\n'+body,'✓ 已复制，可粘贴到 Excel');
 }
 
 function exportMatchCSV() {
-  const rows = Array.from(document.querySelectorAll('#match-tbody tr'))
-    .filter(tr=>!tr.querySelector('.empty'));
+  const rows = Array.from(document.querySelectorAll('#match-tbody tr')).filter(tr=>!tr.querySelector('.empty'));
   if (!rows.length){showToast('没有数据可导出');return;}
   const eq=s=>`"${String(s||'').replace(/"/g,'""')}"`;
   const header=['平台SKU编码','平台SKU名称','匹配类型','匹配编码','匹配名称','系列'].map(eq).join(',');
-  let lastId='',lastName='';
   const body=rows.map(tr=>{
-    const cells=tr.cells;
-    let skuId,skuName,type,code,name;
-    if(cells.length===5){
-      skuId=cells[0].textContent.trim(); lastId=skuId;
-      skuName=cells[1].textContent.trim(); lastName=skuName;
-      type=cells[2].textContent.trim();
-      code=cells[3].textContent.trim();
-      name=cells[4].textContent.trim();
-    } else if(cells.length===3){
-      skuId=cells[0].textContent.trim();
-      skuName=cells[1].textContent.trim();
-      type='未匹配';code='';name='';
-    } else {
-      skuId=lastId;skuName=lastName;
-      type=cells[0].textContent.trim();
-      code=cells[1].textContent.trim();
-      name=cells[2].textContent.trim();
-    }
-    const seriesCellE = cells.length>5 ? cells[5].textContent.trim() : '';
-    return [skuId,skuName,type,code,name,seriesCellE].map(eq).join(',');
-  }).join('\n');
+    const c=tr.cells;
+    if(c.length<6) return '';
+    return [c[0],c[1],c[2],c[3],c[4],c[5]].map(td=>eq(td.textContent.trim())).join(',');
+  }).filter(Boolean).join('\n');
   downloadCSV('平台SKU匹配结果.csv',header+'\n'+body);
 }
+
+// ════════════════════════════════════════════
+//  天气组件
+// ════════════════════════════════════════════
+const WMO_ICONS = {
+  0:'☀️',1:'🌤️',2:'⛅',3:'☁️',
+  45:'🌫️',48:'🌫️',
+  51:'🌦️',53:'🌦️',55:'🌧️',
+  61:'🌧️',63:'🌧️',65:'🌧️',
+  71:'🌨️',73:'🌨️',75:'❄️',
+  80:'🌦️',81:'🌧️',82:'⛈️',
+  95:'⛈️',96:'⛈️',99:'⛈️',
+};
+const WMO_DESC = {
+  0:'晴',1:'晴间多云',2:'多云',3:'阴',
+  45:'雾',48:'雾',
+  51:'小雨',53:'小雨',55:'中雨',
+  61:'小雨',63:'中雨',65:'大雨',
+  71:'小雪',73:'中雪',75:'大雪',
+  80:'小阵雨',81:'中阵雨',82:'雷阵雨',
+  95:'雷暴',96:'雷暴',99:'强雷暴',
+};
+
+async function initWeather() {
+  const el = document.getElementById('weather-text');
+  try {
+    // 1. 获取位置
+    const pos = await new Promise((res,rej)=>
+      navigator.geolocation.getCurrentPosition(res, rej, {timeout:6000})
+    );
+    const {latitude:lat, longitude:lon} = pos.coords;
+
+    // 2. 反向地理编码（获取城市名）
+    let cityName = '';
+    try {
+      const geoRes = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=zh`
+      );
+      const geoData = await geoRes.json();
+      const addr = geoData.address || {};
+      cityName = addr.city || addr.town || addr.county || addr.state || '';
+    } catch(e) {}
+
+    // 3. 获取天气
+    const wRes = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,weathercode&timezone=auto&forecast_days=1`
+    );
+    const wData = await wRes.json();
+    const temp = Math.round(wData.current.temperature_2m);
+    const code = wData.current.weathercode;
+    const icon = WMO_ICONS[code] || '🌡️';
+    const desc = WMO_DESC[code] || '';
+
+    el.innerHTML = `${icon} <span class="weather-temp">${temp}°C</span>` +
+      `<span>${desc}</span>` +
+      (cityName ? `<span class="weather-city">· ${cityName}</span>` : '');
+
+  } catch(e) {
+    // 定位失败：用IP定位兜底
+    try {
+      const ipRes = await fetch('https://ipapi.co/json/');
+      const ipData = await ipRes.json();
+      const wRes = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${ipData.latitude}&longitude=${ipData.longitude}` +
+        `&current=temperature_2m,weathercode&timezone=auto&forecast_days=1`
+      );
+      const wData = await wRes.json();
+      const temp = Math.round(wData.current.temperature_2m);
+      const code = wData.current.weathercode;
+      const icon = WMO_ICONS[code] || '🌡️';
+      const desc = WMO_DESC[code] || '';
+      const city = ipData.city || '';
+      el.innerHTML = `${icon} <span class="weather-temp">${temp}°C</span>` +
+        `<span>${desc}</span>` +
+        (city ? `<span class="weather-city">· ${city}</span>` : '');
+    } catch(e2) {
+      el.textContent = '天气获取失败';
+    }
+  }
+}
+
+// 页面加载后初始化天气，每30分钟刷新
+window.addEventListener('DOMContentLoaded', ()=>{
+  initWeather();
+  setInterval(initWeather, 30*60*1000);
+});
 
 let toastTimer;
 function showToast(msg){
