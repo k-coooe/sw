@@ -1685,24 +1685,33 @@ function exportMatchCSV() {
 // ════════════════════════════════════════════
 //  天气组件（默认徐州，支持定位）
 // ════════════════════════════════════════════
-const WMO_ICONS = {
-  0:'☀️',1:'🌤️',2:'⛅',3:'☁️',
-  45:'🌫️',48:'🌫️',
-  51:'🌦️',53:'🌦️',55:'🌧️',
-  61:'🌧️',63:'🌧️',65:'🌧️',
-  71:'🌨️',73:'🌨️',75:'❄️',
-  80:'🌦️',81:'🌧️',82:'⛈️',
-  95:'⛈️',96:'⛈️',99:'⛈️',
+// 天气代码 → [汉字图标, 描述, 颜色]
+const WMO_DATA = {
+  0:  ['晴','晴','#f59e0b'],
+  1:  ['晴','晴间多云','#f59e0b'],
+  2:  ['云','多云','#6b7280'],
+  3:  ['阴','阴','#6b7280'],
+  45: ['雾','雾','#9ca3af'],
+  48: ['雾','浓雾','#9ca3af'],
+  51: ['雨','小雨','#3b82f6'],
+  53: ['雨','中雨','#3b82f6'],
+  55: ['雨','大雨','#2563eb'],
+  61: ['雨','小雨','#3b82f6'],
+  63: ['雨','中雨','#3b82f6'],
+  65: ['雨','大雨','#2563eb'],
+  71: ['雪','小雪','#93c5fd'],
+  73: ['雪','中雪','#93c5fd'],
+  75: ['雪','大雪','#bfdbfe'],
+  80: ['阵雨','阵雨','#3b82f6'],
+  81: ['阵雨','中阵雨','#2563eb'],
+  82: ['雷雨','雷阵雨','#7c3aed'],
+  95: ['雷雨','雷暴','#7c3aed'],
+  96: ['雷雨','强雷暴','#6d28d9'],
+  99: ['雷雨','强雷暴','#6d28d9'],
 };
-const WMO_DESC = {
-  0:'晴',1:'晴间多云',2:'多云',3:'阴',
-  45:'雾',48:'雾',
-  51:'小雨',53:'小雨',55:'中雨',
-  61:'小雨',63:'中雨',65:'大雨',
-  71:'小雪',73:'中雪',75:'大雪',
-  80:'小阵雨',81:'中阵雨',82:'雷阵雨',
-  95:'雷暴',96:'雷暴',99:'强雷暴',
-};
+function wmoIcon(code)  { return (WMO_DATA[code]||['--','','#6b7280'])[0]; }
+function wmoDesc(code)  { return (WMO_DATA[code]||['--','','#6b7280'])[1]; }
+function wmoColor(code) { return (WMO_DATA[code]||['--','','#6b7280'])[2]; }
 // 徐州默认坐标
 const DEFAULT_LAT = 34.2044, DEFAULT_LON = 117.2851, DEFAULT_CITY = '徐州';
 const WEEK = ['日','一','二','三','四','五','六'];
@@ -1721,12 +1730,16 @@ async function fetchWeather(lat, lon, city) {
   const cw   = d.current_weather;
   const temp = Math.round(cw.temperature);
   const code = cw.weathercode;
-  document.getElementById('w-icon').textContent = WMO_ICONS[code] || '🌡️';
+  const color = wmoColor(code);
+  const iconEl = document.getElementById('w-icon');
+  iconEl.textContent = wmoIcon(code);
+  iconEl.style.cssText = `font-size:15px;font-weight:700;padding:2px 7px;border-radius:6px;background:${color}22;color:${color}`;
   document.getElementById('w-temp').textContent = temp + '°C';
-  document.getElementById('w-desc').textContent = WMO_DESC[code] || '';
-  document.getElementById('w-city').textContent = city;
+  document.getElementById('w-temp').style.color = color;
+  document.getElementById('w-desc').textContent = wmoDesc(code);
+  document.getElementById('w-city').textContent = '· ' + city;
 
-  // 未来3天（daily index 1,2,3；index 0是今天）
+  // 未来3天（daily index 1,2,3）
   const fc = document.getElementById('w-forecast');
   if (d.daily && d.daily.time) {
     fc.innerHTML = d.daily.time.slice(1, 4).map((dateStr, i) => {
@@ -1735,10 +1748,11 @@ async function fetchWeather(lat, lon, city) {
       const wc   = d.daily.weathercode[i + 1];
       const tmax = Math.round(d.daily.temperature_2m_max[i + 1]);
       const tmin = Math.round(d.daily.temperature_2m_min[i + 1]);
+      const wcolor = wmoColor(wc);
       return `<div class="weather-day">
-        <div class="day-label">周${dow}</div>
-        <div class="day-icon">${WMO_ICONS[wc] || '⛅'}</div>
-        <div class="day-temp">${tmin}~${tmax}°</div>
+        <div class="day-label" style="color:var(--muted)">周${dow}</div>
+        <div class="day-icon" style="font-size:12px;font-weight:700;padding:1px 5px;border-radius:4px;background:${wcolor}22;color:${wcolor}">${wmoIcon(wc)}</div>
+        <div class="day-temp" style="font-size:11px;color:var(--text);font-weight:600">${tmin}~${tmax}°</div>
       </div>`;
     }).join('');
   }
