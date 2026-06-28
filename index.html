@@ -435,18 +435,18 @@ function parseRecord(line) {
 //  排序逻辑：版本→科目→年级→学期→SKU
 // ════════════════════════════════════════════
 function defaultSort(a,b) {
-  // 1. 系列名（同系列聚在一起）
-  const sc = (a.seriesName||'').localeCompare(b.seriesName||'','zh');
-  if (sc!==0) return sc;
-  // 2. 科目优先级
-  const pa=SUBJECT_PRIORITY[a.subject]??99, pb=SUBJECT_PRIORITY[b.subject]??99;
-  if (pa!==pb) return pa-pb;
-  // 3. 版本
-  const ec = a.edition.localeCompare(b.edition,'zh');
-  if (ec!==0) return ec;
-  // 4. 学期（上先下后：一上→二上→…→六上→一下→二下→…→六下）
+  // 1. 学期（上先下后，升格式term固定'上'不受影响）
   const ta=a.term==='上'?0:1, tb=b.term==='上'?0:1;
   if (ta!==tb) return ta-tb;
+  // 2. 系列名
+  const sc = (a.seriesName||'').localeCompare(b.seriesName||'','zh');
+  if (sc!==0) return sc;
+  // 3. 科目优先级
+  const pa=SUBJECT_PRIORITY[a.subject]??99, pb=SUBJECT_PRIORITY[b.subject]??99;
+  if (pa!==pb) return pa-pb;
+  // 4. 版本
+  const ec = a.edition.localeCompare(b.edition,'zh');
+  if (ec!==0) return ec;
   // 5. 年级
   if (a.gradeNum!==b.gradeNum) return a.gradeNum-b.gradeNum;
   return a.sku.localeCompare(b.sku,undefined,{numeric:true});
@@ -897,25 +897,27 @@ function buildComboName(records, namePrefix) {
 
 // ── 组合装排序：数学版本 → 语数2本1-6 → 语数英3本1-6 → 学期 ──
 function comboSort(a, b) {
-  // 第一键：系列（A→B→A+B）
+  // 第一键：学期（上先下后）
+  const refA = a.items.find(r=>r.subject==='数') || a.items[0];
+  const refB = b.items.find(r=>r.subject==='数') || b.items[0];
+  const termA = (refA?.term==='上') ? 0 : 1;
+  const termB = (refB?.term==='上') ? 0 : 1;
+  if (termA !== termB) return termA - termB;
+  // 第二键：系列（A→B→A+B）
   const seriesOrder = {'A':0,'B':1,'A+B':2};
   const sa = seriesOrder[a.seriesType??'A']??0, sb = seriesOrder[b.seriesType??'A']??0;
   if (sa !== sb) return sa - sb;
-  // 第二键：数学版本
-  const mathA = a.items.find(r=>r.subject==='数')?.edition || '';
-  const mathB = b.items.find(r=>r.subject==='数')?.edition || '';
+  // 第三键：数学版本
+  const mathA = refA?.edition || '';
+  const mathB = refB?.edition || '';
   const ec = mathA.localeCompare(mathB, 'zh');
   if (ec !== 0) return ec;
-  // 第三键：本数（2本先，3本后）
+  // 第四键：本数（2本先，3本后）
   if (a.items.length !== b.items.length) return a.items.length - b.items.length;
-  // 第四键：年级
-  const gradeA = a.items.find(r=>r.subject==='数')?.gradeNum ?? 99;
-  const gradeB = b.items.find(r=>r.subject==='数')?.gradeNum ?? 99;
-  if (gradeA !== gradeB) return gradeA - gradeB;
-  // 第五键：学期
-  const termA = (a.items.find(r=>r.subject==='数')?.term==='上') ? 0 : 1;
-  const termB = (b.items.find(r=>r.subject==='数')?.term==='上') ? 0 : 1;
-  return termA - termB;
+  // 第五键：年级
+  const gradeA = refA?.gradeNum ?? 99;
+  const gradeB = refB?.gradeNum ?? 99;
+  return gradeA - gradeB;
 }
 
 function processCombo() {
@@ -1503,10 +1505,13 @@ function parsePlatformSku(line) {
 
 // 平台SKU排序：逗号后内容（字典序）→ 年级
 function platformSort(a, b) {
-  // 1. 逗号后原始内容字典序（相同类型聚在一起）
+  // 1. 学期（上先下后）
+  const ta=a.term==='上'?0:1, tb=b.term==='上'?0:1;
+  if (ta!==tb) return ta-tb;
+  // 2. 逗号后原始内容字典序（相同类型聚在一起）
   const rc = (a.rawAfterComma||'').localeCompare(b.rawAfterComma||'','zh');
   if (rc!==0) return rc;
-  // 2. 年级
+  // 3. 年级
   return a.gradeNum - b.gradeNum;
 }
 
