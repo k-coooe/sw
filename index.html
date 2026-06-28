@@ -15,7 +15,7 @@
     }
     body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
       background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px}
-    .page{max-width:1200px;margin:0 auto}
+    .page{max-width:1000px;margin:0 auto}
 
     /* tabs */
     .tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border)}
@@ -444,11 +444,11 @@ function defaultSort(a,b) {
   // 3. 版本
   const ec = a.edition.localeCompare(b.edition,'zh');
   if (ec!==0) return ec;
-  // 4. 年级
-  if (a.gradeNum!==b.gradeNum) return a.gradeNum-b.gradeNum;
-  // 5. 学期
+  // 4. 学期（上先下后：一上→二上→…→六上→一下→二下→…→六下）
   const ta=a.term==='上'?0:1, tb=b.term==='上'?0:1;
   if (ta!==tb) return ta-tb;
+  // 5. 年级
+  if (a.gradeNum!==b.gradeNum) return a.gradeNum-b.gradeNum;
   return a.sku.localeCompare(b.sku,undefined,{numeric:true});
 }
 
