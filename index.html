@@ -15,7 +15,7 @@
     }
     body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
       background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px}
-    .page{max-width:1200px;margin:0 auto}
+    .page{max-width:1000px;margin:0 auto}
 
     /* tabs */
     .tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border)}
@@ -331,9 +331,9 @@ const TAIL_JUNK  = /(-新书预售|-MX|-[A-Z]{1,3})(\b|$)/gi;
 
 // ── 书名关键词→科目推断（当年级段没有明确科目字时使用）──
 const SERIES_SUBJ_RULES = [
-  { keys: ['英语','英文','字母','phonics','pep'], subj: '英' },
-  { keys: ['语文','默写','阅读','作文','识字','写字','汉字'], subj: '语' },
-  { keys: ['数学','口算','计算','乘法','除法','应用题','数'], subj: '数' },
+  { keys: ['英语','英文','字母','phonics','pep','英'], subj: '英' },
+  { keys: ['语文','默写','阅读','作文','识字','写字','汉字','练字','字帖','书写','钢笔','硬笔'], subj: '语' },
+  { keys: ['数学','口算','计算','乘法','除法','应用题'], subj: '数' },
   { keys: ['政治','道德','品德'], subj: '政' },
 ];
 function inferSubjectFromSeries(seriesStr) {
@@ -435,15 +435,15 @@ function parseRecord(line) {
 //  排序逻辑：版本→科目→年级→学期→SKU
 // ════════════════════════════════════════════
 function defaultSort(a,b) {
-  // 1. 科目优先级
-  const pa=SUBJECT_PRIORITY[a.subject]??99, pb=SUBJECT_PRIORITY[b.subject]??99;
-  if (pa!==pb) return pa-pb;
-  // 2. 版本
-  const ec = a.edition.localeCompare(b.edition,'zh');
-  if (ec!==0) return ec;
-  // 3. 系列名（同科目同版本时，系列聚在一起）
+  // 1. 系列名（同系列聚在一起）
   const sc = (a.seriesName||'').localeCompare(b.seriesName||'','zh');
   if (sc!==0) return sc;
+  // 2. 科目优先级
+  const pa=SUBJECT_PRIORITY[a.subject]??99, pb=SUBJECT_PRIORITY[b.subject]??99;
+  if (pa!==pb) return pa-pb;
+  // 3. 版本
+  const ec = a.edition.localeCompare(b.edition,'zh');
+  if (ec!==0) return ec;
   // 4. 年级
   if (a.gradeNum!==b.gradeNum) return a.gradeNum-b.gradeNum;
   // 5. 学期
@@ -1249,8 +1249,8 @@ function editionMatch(edKw, rEd) {
 // ── 科目识别：从名称描述判断单一科目（Tab3平台SKU用）────
 // 与 SERIES_SUBJ_RULES 保持一致
 const SUBJ_DESC_MAP = [
-  {keys:['英语','英文','字母','phonics','pep'], subj:'英'},
-  {keys:['语文','默写','阅读','作文','识字','写字','汉字'], subj:'语'},
+  {keys:['英语','英文','字母','phonics','pep','英'], subj:'英'},
+  {keys:['语文','默写','阅读','作文','识字','写字','汉字','练字','字帖','书写','钢笔','硬笔'], subj:'语'},
   {keys:['数学','口算','计算','乘法','除法','应用题'], subj:'数'},
   {keys:['政治','道德','品德'], subj:'政'},
   {keys:['综合'], subj:'科'},
@@ -1312,15 +1312,16 @@ function parsePlatformSku(line) {
   // 先去掉【年份季节】标注、"册"字
   let nameForGrade = skuName
     .replace(/【\d{2,4}[秋春冬夏]】/g,'')
-    .replace(/（[^）]*）/g,'')   // 去掉（括号说明）
+    .replace(/（[^）]*）/g,'')
     .replace(/([上下])册/g,'$1')
     .trim();
 
-  // 支持两种年级格式：
-  // 格式A：X年级上/下（标准）
-  // 格式B：X升Y（暑假衔接）→ 年级取前者，term默认'上'
+  // 支持三种年级格式：
+  // 格式A：X年级上/下（标准：一年级上）
+  // 格式B：X升Y（暑假衔接带"年级"：一年级升二年级 → 罕见）
+  // 格式C：X升Y 裸格式（最常见：一升二，逗号前或名称开头）
   const gtm  = nameForGrade.match(/([一二三四五六七八九])年级([上下])/);
-  const gtmS = nameForGrade.match(/([一二三四五])升([二三四五六])/); // 升格式
+  const gtmS = nameForGrade.match(/([一二三四五])升([二三四五六])/); // 含"年级"或裸格式都能匹
 
   if (!gtm && !gtmS) return {skuId,skuName,rawAfterComma:'',gradeNum:99,term:'上',gradeLabel:'',subjects:[],editions:[],itemCount:0,subjectPart:'',parsed:false};
 
@@ -1517,14 +1518,54 @@ function matchPlatformSku(p) {
   const results=[];
 
   if (p.itemCount===1) {
-    // ── 单品：年级+学期+科目+规格精准匹配 ──
-    const subj = p.subjects[0];
+    // ── 单品匹配：年级+学期+版本精准，名称语义匹配 ──
     const edKw = p.editions[0] || p.edition;
+
+    // 从平台SKU描述部分提取有意义的词（去掉版本词、科目字、数字英文）
+    const EDITION_KWS = ['苏教','江苏','人教','北师','译林','外研','冀教','青岛','沪教','全国'];
+    const rawDesc = (p.subjectPart || p.rawAfterComma || '')
+      .replace(/【[^】]*】/g,'').replace(/\([^)]*\)/g,'').trim();
+    // 把版本关键词从描述词里去掉，剩下的才是系列特征词
+    let descForMatch = rawDesc;
+    for (const ek of EDITION_KWS) descForMatch = descForMatch.replace(new RegExp(ek,'g'),'');
+    // 过滤通用词（时间词/科目字/太短），保留真正的书名特征词
+    const GENERIC_WORDS = new Set([
+      '语文','数学','英语','政治','综合','语','数','英','政','科',
+      '暑假','寒假','春季','秋季','上册','下册','上','下','练习','作业','同步',
+    ]);
+    const pDescWords = descForMatch
+      .split(/[\s+\-，,]+/).map(w=>w.trim())
+      .filter(w=>w.length>=2 && !GENERIC_WORDS.has(w));
+
+    // 有书名特征词（如"口算计算题"、"字帖"）才走语义匹配
+    const hasSpecificDesc = pDescWords.length > 0;
+
     for (const r of sortRecords) {
       if (!r.parsed) continue;
-      if (r.gradeNum!==p.gradeNum || r.term!==p.term) continue;
-      if (subj!=='其他' && r.subject!==subj) continue;
+      // 年级匹配（普通格式用term，升格式用gradeLabel）
+      if (r.gradeNum!==p.gradeNum) continue;
+      if (p.gradeLabel) {
+        if ((r.gradeLabel||'')!==p.gradeLabel) continue;
+      } else {
+        if (r.term!==p.term) continue;
+      }
+      // 版本精准匹配
       if (!sameSpec(edKw, r.edition)) continue;
+
+      const rSeries = r.seriesName || '';
+
+      const subj = p.subjects[0];
+      if (hasSpecificDesc) {
+        // 有特征词：名称语义匹配（平台描述词是单品seriesName的子串）
+        const nameMatch = pDescWords.some(w=>rSeries.includes(w));
+        if (!nameMatch) continue;
+        // 同时：如果科目已识别，也要匹科目（如"衔接-数学"不能匹语文衔接）
+        if (subj!=='其他' && r.subject!==subj) continue;
+      } else {
+        // 无特征词（纯科目描述如"数学"/"语文"）：按科目匹
+        if (subj!=='其他' && r.subject!==subj) continue;
+      }
+
       results.push({type:'单品', code:r.sku, name:r.cleanName||r.name, _series:'A'});
     }
 
