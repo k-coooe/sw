@@ -1325,11 +1325,23 @@ function parsePlatformSku(line) {
     .replace(/([上下])册/g,'$1')
     .trim();
 
-  const gtm = nameForGrade.match(/([一二三四五六七八九])年级([上下])/);
-  if (!gtm) return {skuId,skuName,rawAfterComma:'',gradeNum:99,term:'上',subjects:[],editions:[],itemCount:0,subjectPart:'',parsed:false};
+  // 支持两种年级格式：
+  // 格式A：X年级上/下（标准）
+  // 格式B：X升Y（暑假衔接）→ 年级取前者，term默认'上'
+  const gtm  = nameForGrade.match(/([一二三四五六七八九])年级([上下])/);
+  const gtmS = nameForGrade.match(/([一二三四五])升([二三四五六])/); // 升格式
 
-  const gradeNum = CN2N[gtm[1]]||99;
-  const term     = gtm[2];
+  if (!gtm && !gtmS) return {skuId,skuName,rawAfterComma:'',gradeNum:99,term:'上',gradeLabel:'',subjects:[],editions:[],itemCount:0,subjectPart:'',parsed:false};
+
+  let gradeNum, term, gradeLabel='';
+  if (gtm) {
+    gradeNum   = CN2N[gtm[1]]||99;
+    term       = gtm[2];
+  } else {
+    gradeNum   = CN2N[gtmS[1]]||99;
+    term       = '上';
+    gradeLabel = gtmS[1]+'升'+gtmS[2]; // 如"五升六"，用于匹配
+  }
 
   // ── 第二步：取逗号后的原始内容作为排序键和解析源 ──
   const commaIdx = skuName.indexOf(',');
@@ -1494,7 +1506,7 @@ function parsePlatformSku(line) {
   const edition   = mathIdx>=0 ? editions[mathIdx] : (editions[0]||globalFallback);
   const subjectPart = rawSegs.join('+');
 
-  return {skuId, skuName, rawAfterComma, gradeNum, term, subjectPart, subjects, editions, edition, itemCount, parsed:true};
+  return {skuId, skuName, rawAfterComma, gradeNum, term, gradeLabel, subjectPart, subjects, editions, edition, itemCount, parsed:true};
 }
 
 // 平台SKU排序：逗号后内容（字典序）→ 年级
@@ -1575,7 +1587,14 @@ function matchPlatformSku(p) {
       if (c.items.length !== p.itemCount) return false;
       // 年级+学期（取数学单品）
       const refItem = c.items.find(i=>i.subject==='数') || c.items[0];
-      if (!refItem || refItem.gradeNum!==p.gradeNum || refItem.term!==p.term) return false;
+      if (!refItem) return false;
+      if (refItem.gradeNum!==p.gradeNum) return false;
+      // 升格式：gradeLabel必须一致（三升四≠四升五）；普通格式：term必须一致
+      if (p.gradeLabel) {
+        if ((refItem.gradeLabel||'') !== p.gradeLabel) return false;
+      } else {
+        if (refItem.term!==p.term) return false;
+      }
       // 版本验证：平台SKU每个科目版本，和组合装中该科目的任一单品版本匹配即可
       // （4本中语文有2本但版本一致，只需匹到其中一本）
       const pEdMap = {}; // {科目: 版本}
