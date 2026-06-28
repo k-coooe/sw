@@ -360,7 +360,7 @@ function parseRecord(line) {
   const tag = tailMatch ? tailMatch[0].replace(/^-+/,'').trim() : '';
 
   const parts = cleanName.split('-').map(s=>s.trim()).filter(Boolean);
-  let gradeNum=99, subject='其他', term='上', edition='', seriesName='', parsed=false;
+  let gradeNum=99, subject='其他', term='上', edition='', seriesName='', gradeLabel='', parsed=false;
 
   for (let i=parts.length-1; i>=0; i--) {
     const seg = parts[i];
@@ -393,6 +393,7 @@ function parseRecord(line) {
     } else if (mC && mC[3]) {
       // 五升六英语 → 年级=五，term='上'（暑假默认），科目从mC[3]
       gradeNum   = CN2N[mC[1]]||99;
+      gradeLabel = mC[1]+'升'+mC[2]; // 如"五升六"
       term       = '上';
       edition    = i>0 ? parts[i-1] : '';
       seriesName = i>1 ? parts[i-2] : (i>0 ? parts[0] : '');
@@ -403,8 +404,9 @@ function parseRecord(line) {
 
     } else if (mB) {
       // 五升六（独立段）
-      gradeNum = CN2N[mB[1]]||99;
-      term     = '上';
+      gradeNum   = CN2N[mB[1]]||99;
+      gradeLabel = mB[1]+'升'+mB[2]; // 如"三升四"
+      term       = '上';
 
       // 版本和系列名：判断年级段是否在最后
       // 格式X：26秋-系列-版本-三升四（年级在末尾，版本在前）→ edition=parts[i-1]
@@ -435,7 +437,7 @@ function parseRecord(line) {
     }
   }
 
-  return {sku, name, cleanName, tag, subject, gradeNum, term, edition, seriesName, parsed};
+  return {sku, name, cleanName, tag, subject, gradeNum, gradeLabel, term, edition, seriesName, parsed};
 }
 
 // ════════════════════════════════════════════
@@ -877,8 +879,9 @@ function buildComboName(records, namePrefix) {
   const r0 = sorted[0];
 
   const season = r0.cleanName.split('-')[0]?.trim() || '';
-  const grade  = N2CN[r0.gradeNum] || '';
-  const term   = r0.term;
+  // 优先用gradeLabel（如"三升四"），否则用N2CN转换
+  const grade  = r0.gradeLabel || N2CN[r0.gradeNum] || '';
+  const term   = r0.gradeLabel ? '' : r0.term; // 升格式不加上/下
 
   // 系列名：去重后简化
   const seriesNames = [...new Set(sorted.map(r=>r.seriesName))];
@@ -1075,8 +1078,8 @@ function processCombo() {
 function buildComboNameMulti(items, namePrefix) {
   // 按科目分组，提取年级/学期
   const season = items[0].cleanName.split('-')[0]?.trim() || '';
-  const grade  = N2CN[items[0].gradeNum] || '';
-  const term   = items[0].term;
+  const grade  = items[0].gradeLabel || N2CN[items[0].gradeNum] || '';
+  const term   = items[0].gradeLabel ? '' : items[0].term;
 
   // 系列名（去重，按原顺序）
   const seriesNames = [...new Set(items.map(r=>r.seriesName))];
