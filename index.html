@@ -362,80 +362,71 @@ function parseRecord(line) {
   const parts = cleanName.split('-').map(s=>s.trim()).filter(Boolean);
   let gradeNum=99, subject='其他', term='上', edition='', seriesName='', gradeLabel='', parsed=false;
 
-  for (let i=parts.length-1; i>=0; i--) {
+  // ── 扫描式识别：不依赖位置，从各段分别提取年级/版本/科目/系列名 ──
+
+  // 1. 找年级锚点段（含年级+学期 或 升格式）
+  let gradeIdx = -1;
+  let gradeMatch = null, upgradeMatch = null;
+  for (let i=0; i<parts.length; i++) {
     const seg = parts[i];
-
-    // 格式A：标准格式 [年级][科目?][上下]，如"一数上"、"一上"
     const mA = seg.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}]?)([上下])$`));
-    // 格式B：暑假衔接格式 [年级]升[年级]，如"五升六"，科目在下一段或从系列名推断
-    const mB = seg.match(/^([一二三四五])升([二三四五六])$/);
-    // 格式C：暑假衔接+科目 [年级]升[年级]-[科目]，分开两段时科目在后续段
-    // 也可能写成"五升六英语"（连在一起）
-    const mC = seg.match(new RegExp(`^([一二三四五])升([二三四五六])([${SUBJ_CHARS}]?)$`));
+    const mU = seg.match(/^([一二三四五])升([二三四五六])([语数英政科理化史地物生]?)$/);
+    if (mA) { gradeIdx=i; gradeMatch=mA; break; }
+    if (mU) { gradeIdx=i; upgradeMatch=mU; break; }
+  }
 
-    if (mA) {
-      gradeNum = CN2N[mA[1]]||99;
-      const sc = mA[2];
-      term = mA[3];
-      edition    = i>0 ? parts[i-1] : '';
-      seriesName = i>1 ? parts[i-2] : (i>0 ? parts[0] : '');
-      if (sc !== '' && '语数英政科'.includes(sc)) {
-        subject = sc;
-      } else if (sc !== '') {
-        subject = '科';
-      } else {
-        const inferred = inferSubjectFromSeries(seriesName + ' ' + parts.slice(0,i).join(' '));
-        subject = inferred !== '其他' ? inferred : '科';
-      }
-      parsed = true;
-      break;
+  if (gradeIdx === -1) {
+    // 找不到年级锚点 → 未解析
+    return {sku, name, cleanName, tag, subject, gradeNum, gradeLabel, term, edition, seriesName, parsed};
+  }
 
-    } else if (mC && mC[3]) {
-      // 五升六英语 → 年级=五，term='上'（暑假默认），科目从mC[3]
-      gradeNum   = CN2N[mC[1]]||99;
-      gradeLabel = mC[1]+'升'+mC[2]; // 如"五升六"
-      term       = '上';
-      edition    = i>0 ? parts[i-1] : '';
-      seriesName = i>1 ? parts[i-2] : (i>0 ? parts[0] : '');
-      const sc = mC[3];
-      subject = ('语数英政科'.includes(sc)) ? sc : '科';
-      parsed = true;
-      break;
+  // 2. 解析年级/学期/内嵌科目
+  if (gradeMatch) {
+    gradeNum = CN2N[gradeMatch[1]]||99;
+    term     = gradeMatch[3];
+    const sc = gradeMatch[2];
+    if (sc && '语数英政科'.includes(sc)) subject = sc;
+    else if (sc) subject = '科';
+  } else {
+    gradeNum   = CN2N[upgradeMatch[1]]||99;
+    gradeLabel = upgradeMatch[1]+'升'+upgradeMatch[2];
+    term       = '上';
+    const sc   = upgradeMatch[3];
+    if (sc && '语数英政科'.includes(sc)) subject = sc;
+  }
 
-    } else if (mB) {
-      // 五升六（独立段）
-      gradeNum   = CN2N[mB[1]]||99;
-      gradeLabel = mB[1]+'升'+mB[2]; // 如"三升四"
-      term       = '上';
-
-      // 版本和系列名：判断年级段是否在最后
-      // 格式X：26秋-系列-版本-三升四（年级在末尾，版本在前）→ edition=parts[i-1]
-      // 格式Y：26秋-系列-三升四-版本（年级在中间，版本在后）→ edition=parts[i+1]
-      const afterSeg = i+1 < parts.length ? parts[i+1] : '';
-      const beforeSeg = i>0 ? parts[i-1] : '';
-
-      // 判断后面一段是否是版本关键词（含已知版本词则认为是版本在后）
-      const isEditionAfter = afterSeg && extractEditionFromDesc(afterSeg);
-
-      if (isEditionAfter) {
-        // 格式Y：版本在年级后
-        edition    = afterSeg;
-        seriesName = i>0 ? beforeSeg : '';
-      } else {
-        // 格式X：版本在年级前（标准格式）
-        edition    = beforeSeg;
-        seriesName = i>1 ? parts[i-2] : (i>0 ? parts[0] : '');
-      }
-
-      // 科目：从系列名推断（口算→数，默写→语，英语→英）
-      const inferred = inferSubjectFromSeries(
-        seriesName + ' ' + parts.slice(0,i).join(' ') + ' ' + afterSeg
-      );
-      subject = inferred !== '其他' ? inferred : '其他';
-      parsed = true;
-      break;
+  // 3. 扫描所有非年级段，找版本词和科目词
+  const nonGradeParts = parts.filter((_,i)=>i!==gradeIdx);
+  for (const seg of nonGradeParts) {
+    // 版本识别：含已知版本关键词
+    if (!edition) {
+      const ed = extractEditionFromDesc(seg);
+      if (ed) { edition = seg; continue; }
+    }
+    // 科目识别：含科目关键词（仅当还未确定科目时）
+    if (subject === '其他') {
+      const inferred = inferSubjectFromSeries(seg);
+      if (inferred !== '其他') { subject = inferred; continue; }
     }
   }
+
+  // 4. 科目兜底：从整个名称系列部分推断
+  if (subject === '其他') {
+    subject = inferSubjectFromSeries(cleanName) || '其他';
+  }
+
+  // 5. 系列名：去掉年份段、版本段、年级段后剩余的段
+  const YEAR_RE = /^\d{2}[秋春冬夏]$/;
+  const edNorm  = edition ? extractEditionFromDesc(edition) : '';
+  seriesName = parts.filter((_,i)=>{
+    if (i === gradeIdx) return false;
+    const seg = parts[i];
+    if (YEAR_RE.test(seg)) return false;
+    if (edition && seg === edition) return false;
+    return true;
+  }).join('-');
+
+  parsed = true;
 
   return {sku, name, cleanName, tag, subject, gradeNum, gradeLabel, term, edition, seriesName, parsed};
 }
