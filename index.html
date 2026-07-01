@@ -15,7 +15,7 @@
     }
     body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
       background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px}
-    .page{max-width:1200px;margin:0 auto}
+    .page{max-width:1000px;margin:0 auto}
 
     /* tabs */
     .tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border)}
@@ -364,19 +364,23 @@ function parseRecord(line) {
 
   // ── 扫描式识别：不依赖位置，从各段分别提取年级/版本/科目/系列名 ──
 
-  // 1. 找年级锚点段（含年级+学期 或 升格式）
+  // 1. 找年级锚点段（含年级+学期 或 升格式 或 无学期格式）
   let gradeIdx = -1;
-  let gradeMatch = null, upgradeMatch = null;
+  let gradeMatch = null, upgradeMatch = null, noTermMatch = null;
   for (let i=0; i<parts.length; i++) {
     const seg = parts[i];
+    // 格式A：有学期 如"一数上"、"一上"
     const mA = seg.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}]?)([上下])$`));
+    // 格式U：升格式 如"三升四"
     const mU = seg.match(/^([一二三四五])升([二三四五六])([语数英政科理化史地物生]?)$/);
+    // 格式N：无学期 如"一语"、"一数"、"三英"（年级+科目，无上下）
+    const mN = seg.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}])$`));
     if (mA) { gradeIdx=i; gradeMatch=mA; break; }
     if (mU) { gradeIdx=i; upgradeMatch=mU; break; }
+    if (mN) { gradeIdx=i; noTermMatch=mN; break; }
   }
 
   if (gradeIdx === -1) {
-    // 找不到年级锚点 → 未解析
     return {sku, name, cleanName, tag, subject, gradeNum, gradeLabel, term, edition, seriesName, parsed};
   }
 
@@ -387,12 +391,30 @@ function parseRecord(line) {
     const sc = gradeMatch[2];
     if (sc && '语数英政科'.includes(sc)) subject = sc;
     else if (sc) subject = '科';
-  } else {
+  } else if (upgradeMatch) {
     gradeNum   = CN2N[upgradeMatch[1]]||99;
     gradeLabel = upgradeMatch[1]+'升'+upgradeMatch[2];
     term       = '上';
     const sc   = upgradeMatch[3];
     if (sc && '语数英政科'.includes(sc)) subject = sc;
+  } else if (noTermMatch) {
+    const sc = noTermMatch[2];
+    if (sc && '语数英政科'.includes(sc)) subject = sc;
+    else if (sc) subject = '科';
+
+    // 判断是否暑假类：名称含"暑假"且年级在一-五 → 映射为升格式
+    const UPGRADE_MAP = {'一':'一升二','二':'二升三','三':'三升四','四':'四升五','五':'五升六'};
+    const isXiaoJia = cleanName.includes('暑假') && UPGRADE_MAP[noTermMatch[1]];
+    if (isXiaoJia) {
+      // 作为升格式处理
+      gradeNum   = CN2N[noTermMatch[1]]||99;
+      gradeLabel = UPGRADE_MAP[noTermMatch[1]];
+      term       = '上';
+    } else {
+      gradeNum   = CN2N[noTermMatch[1]]||99;
+      term       = '无';
+      gradeLabel = noTermMatch[1] + noTermMatch[2]; // 如"一语"
+    }
   }
 
   // 3. 扫描所有非年级段，找版本词和科目词
@@ -760,16 +782,19 @@ function buildCombosForYu(yuw, shuList, engList, allYuList) {
   }
 
   // ── 优先级3：人教系语文 ──────────────────────
+  // 无版本数学也归入传统系（不限制版本）
   const tradShu = shuList.filter(s=>{
     const ss=parseEditionSpec(s.edition);
+    if (!s.edition) return true; // 无版本不限制
     return isTraditionalShu(s.edition) && !ss.isWuSiZhi && !ss.isSujiao;
   });
   for (const shu of tradShu) {
     results.push([yuw, shu]);
-    // 3本：仅人教英语（不含外研/译林/精通等）
+    // 3本：人教英语或无版本英语（不含外研/译林/精通等）
     const validEng = engList.filter(e=>{
+      if (!e.edition) return true; // 无版本信息不限制
       const es=parseEditionSpec(e.edition);
-      return es.base==='人教' && !es.isBlocked && !es.isWuSiZhi;
+      return (es.base==='人教' || es.base==='') && !es.isBlocked && !es.isWuSiZhi;
     });
     for (const eng of validEng) results.push([yuw, shu, eng]);
   }
@@ -794,9 +819,10 @@ function buildCombosForYu(yuw, shuList, engList, allYuList) {
     }
   }
 
-  // ── 优先级4：其他版本数学（青岛/冀教等）────
+  // ── 优先级4：其他版本数学（青岛/冀教等，有明确版本且非传统系）────
   const otherShu = shuList.filter(s=>{
     const ss=parseEditionSpec(s.edition);
+    if (!s.edition) return false; // 无版本已由tradShu处理
     return !ss.isWuSiZhi && !ss.isSujiao && !isTraditionalShu(s.edition);
   });
   for (const shu of otherShu) {
@@ -872,7 +898,7 @@ function buildComboName(records, namePrefix) {
   const season = r0.cleanName.split('-')[0]?.trim() || '';
   // 优先用gradeLabel（如"三升四"），否则用N2CN转换
   const grade  = r0.gradeLabel || N2CN[r0.gradeNum] || '';
-  const term   = r0.gradeLabel ? '' : r0.term; // 升格式不加上/下
+  const term   = (r0.gradeLabel || r0.term==='无') ? '' : r0.term; // 升格式/无学期不加上/下
 
   // 系列名：去重后简化
   const seriesNames = [...new Set(sorted.map(r=>r.seriesName))];
@@ -886,11 +912,12 @@ function buildComboName(records, namePrefix) {
   const subjStr = sorted.map(r=>r.subject).join('+');
 
   if (allSame) {
-    // 同版本：SWCC/26秋-系列-人教-一语+数上-2本
-    return `${namePrefix}${season}-${seriesStr}-${editions[0]}-${grade}${subjStr}${term}-${sorted.length}本`;
+    // 同版本：版本为空时省略版本段
+    const edPart = editions[0] ? `-${editions[0]}` : '';
+    return `${namePrefix}${season}-${seriesStr}${edPart}-${grade}${subjStr}${term}-${sorted.length}本`;
   } else {
-    // 跨版本：SWCC/26秋-系列-人教语+北师数-一上-2本
-    const edSubj = sorted.map(r=>`${r.edition}${r.subject}`).join('+');
+    // 跨版本：版本+科目，版本为空时只写科目
+    const edSubj = sorted.map(r=>r.edition ? `${r.edition}${r.subject}` : r.subject).join('+');
     return `${namePrefix}${season}-${seriesStr}-${edSubj}-${grade}${term}-${sorted.length}本`;
   }
 }
@@ -1072,7 +1099,7 @@ function buildComboNameMulti(items, namePrefix) {
   // 按科目分组，提取年级/学期
   const season = items[0].cleanName.split('-')[0]?.trim() || '';
   const grade  = items[0].gradeLabel || N2CN[items[0].gradeNum] || '';
-  const term   = items[0].gradeLabel ? '' : items[0].term;
+  const term   = (items[0].gradeLabel || items[0].term==='无') ? '' : items[0].term;
 
   // 系列名（去重，按原顺序）
   const seriesNames = [...new Set(items.map(r=>r.seriesName))];
@@ -1338,7 +1365,8 @@ function parsePlatformSku(line) {
   }
 
   // ── 第二步：取逗号后的原始内容作为排序键和解析源 ──
-  const commaIdx = skuName.indexOf(',');
+  // 支持英文逗号和中文逗号作为分隔符
+  const commaIdx = skuName.search(/[,，]/);
   const rawAfterComma = commaIdx>=0 ? skuName.slice(commaIdx+1).trim() : skuName;
 
   // ── 第三步：规范化逗号后内容，统一提取科目+版本 ──
@@ -1505,8 +1533,9 @@ function parsePlatformSku(line) {
 
 // 平台SKU排序：逗号后内容（字典序）→ 年级
 function platformSort(a, b) {
-  // 1. 学期（上先下后）
-  const ta=a.term==='上'?0:1, tb=b.term==='上'?0:1;
+  // 1. 学期（上先→下→无学期最后）
+  const termOrder = t => t==='上'?0 : t==='下'?1 : 2;
+  const ta=termOrder(a.term), tb=termOrder(b.term);
   if (ta!==tb) return ta-tb;
   // 2. 逗号后原始内容字典序（相同类型聚在一起）
   const rc = (a.rawAfterComma||'').localeCompare(b.rawAfterComma||'','zh');
@@ -1536,13 +1565,19 @@ function matchPlatformSku(p) {
     // 过滤通用词（时间词/科目字/太短），保留真正的书名特征词
     const GENERIC_WORDS = new Set([
       '语文','数学','英语','政治','综合','语','数','英','政','科',
-      '暑假','寒假','春季','秋季','上册','下册','上','下','练习','作业','同步',
+      '暑假','寒假','春季','秋季','上册','下册','上','下','练习','同步',
     ]);
-    const pDescWords = descForMatch
-      .split(/[\s+\-，,]+/).map(w=>w.trim())
+    // 同时去掉科目词再提取特征词（"暑假作业数学"→去掉"数学"→"暑假作业"→过滤"暑假"→"作业"）
+    const SUBJ_WORDS = ['语文','数学','英语','政治','综合','语','数','英','政','科',
+      '口算','计算','默写','阅读','作文','写字','练字','字帖','书写'];
+    let descStripped = descForMatch;
+    for (const sw of SUBJ_WORDS) descStripped = descStripped.replace(new RegExp(sw,'g'),'');
+    // 从原始描述和去科目后的描述各提取词，合并
+    const extractWords = str => str.split(/[\s+\-，,]+/).map(w=>w.trim())
       .filter(w=>w.length>=2 && !GENERIC_WORDS.has(w));
+    const pDescWords = [...new Set([...extractWords(descForMatch), ...extractWords(descStripped)])];
 
-    // 有书名特征词（如"口算计算题"、"字帖"）才走语义匹配
+    // 有书名特征词才走语义匹配
     const hasSpecificDesc = pDescWords.length > 0;
 
     for (const r of sortRecords) {
@@ -1551,20 +1586,28 @@ function matchPlatformSku(p) {
       if (r.gradeNum!==p.gradeNum) continue;
       if (p.gradeLabel) {
         if ((r.gradeLabel||'')!==p.gradeLabel) continue;
+      } else if (p.term==='无') {
+        // 平台SKU无学期：只匹单品库中同样无学期的单品
+        if (r.term!=='无') continue;
       } else {
-        if (r.term!==p.term) continue;
+        // 普通学期：精准匹配，且排除无学期单品
+        if (r.term==='无' || r.term!==p.term) continue;
       }
-      // 版本精准匹配
-      if (!sameSpec(edKw, r.edition)) continue;
+      // 版本匹配：平台SKU有版本时验证；单品无版本时允许任意版本匹配
+      if (edKw && r.edition && !sameSpec(edKw, r.edition)) continue;
 
       const rSeries = r.seriesName || '';
 
       const subj = p.subjects[0];
       if (hasSpecificDesc) {
-        // 有特征词：名称语义匹配（平台描述词是单品seriesName的子串）
-        const nameMatch = pDescWords.some(w=>rSeries.includes(w));
+        const rSeriesWords = [];
+        for (let s=0; s<rSeries.length; s++)
+          for (let l=2; l<=Math.min(rSeries.length-s, 6); l++)
+            rSeriesWords.push(rSeries.slice(s,s+l));
+        const fwd = pDescWords.some(w=>rSeries.includes(w));
+        const bwd = rSeriesWords.filter(w=>!GENERIC_WORDS.has(w)).some(w=>descForMatch.includes(w));
+        const nameMatch = fwd || bwd;
         if (!nameMatch) continue;
-        // 同时：如果科目已识别，也要匹科目（如"衔接-数学"不能匹语文衔接）
         if (subj!=='其他' && r.subject!==subj) continue;
       } else {
         // 无特征词（纯科目描述如"数学"/"语文"）：按科目匹
@@ -1639,11 +1682,13 @@ function matchPlatformSku(p) {
         const subj=p.subjects[i], ed=p.editions[i]||p.edition;
         if (ed && !pEdMap[subj]) pEdMap[subj]=ed; // 取第一个非空版本
       }
+      // 版本验证：平台和单品任一方无版本则放行
       for (const [subj, pEd] of Object.entries(pEdMap)) {
         if (!pEd) continue;
         const cItems = c.items.filter(i=>i.subject===subj);
         if (!cItems.length) return false;
-        if (!cItems.some(ci=>sameSpec(pEd, ci.edition))) return false;
+        // 单品无版本时放行，双方都有版本才做sameSpec比对
+        if (!cItems.some(ci=>!ci.edition || sameSpec(pEd, ci.edition))) return false;
       }
       return true;
     }
@@ -1706,6 +1751,7 @@ function processMatch() {
   const lines = raw.split(/\r?\n/).map(parsePlatformSku).filter(Boolean);
   lines.sort(platformSort);
   matchRecords = lines;
+
 
   const tbody = document.getElementById('match-tbody');
   if (!lines.length) {
