@@ -1615,12 +1615,11 @@ function matchPlatformSku(p) {
         // 普通学期：精准匹配，且排除无学期单品
         if (r.term==='无' || r.term!==p.term) continue;
       }
+      const subj = p.subjects[0];
       // 版本匹配：平台SKU有版本时验证；单品无版本时允许任意版本匹配
       if (edKw && r.edition && !sameSpec(edKw, r.edition, subj)) continue;
 
       const rSeries = r.seriesName || '';
-
-      const subj = p.subjects[0];
       if (hasSpecificDesc) {
         const rSeriesWords = [];
         for (let s=0; s<rSeries.length; s++)
