@@ -15,7 +15,7 @@
     }
     body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
       background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px}
-    .page{max-width:1000px;margin:0 auto}
+    .page{max-width:1200px;margin:0 auto}
 
     /* tabs */
     .tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border)}
@@ -369,12 +369,14 @@ function parseRecord(line) {
   let gradeMatch = null, upgradeMatch = null, noTermMatch = null;
   for (let i=0; i<parts.length; i++) {
     const seg = parts[i];
+    // 去掉末尾括号内容（如"一数下（江苏专版）"→"一数下"）再匹配
+    const segClean = seg.replace(/[（(][^）)]*[）)]/g,'').trim();
     // 格式A：有学期 如"一数上"、"一上"
-    const mA = seg.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}]?)([上下])$`));
+    const mA = segClean.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}]?)([上下])$`));
     // 格式U：升格式 如"三升四"
-    const mU = seg.match(/^([一二三四五])升([二三四五六])([语数英政科理化史地物生]?)$/);
+    const mU = segClean.match(/^([一二三四五])升([二三四五六])([语数英政科理化史地物生]?)$/);
     // 格式N：无学期 如"一语"、"一数"、"三英"（年级+科目，无上下）
-    const mN = seg.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}])$`));
+    const mN = segClean.match(new RegExp(`^([一二三四五六七八九])([${SUBJ_CHARS}])$`));
     if (mA) { gradeIdx=i; gradeMatch=mA; break; }
     if (mU) { gradeIdx=i; upgradeMatch=mU; break; }
     if (mN) { gradeIdx=i; noTermMatch=mN; break; }
@@ -663,7 +665,7 @@ function yuYingAllowed(yuEd, yingEd) {
 // ══════════════════════════════════════════════════════
 
 // 规格变体标记（优先级从高到低匹配）
-const EDITION_VARIANTS = ['五四制','江苏专用','江苏版'];
+const EDITION_VARIANTS = ['五四制','江苏专用','江苏专版','江苏版','浙江专版','浙江版','广东版','广州版','北京版'];
 
 // 版本主体规则表（按优先级排列，长/具体的放前面）
 // blocked=true 表示该英语版本不参与组合
@@ -1316,7 +1318,7 @@ function normalizeYuEdition(subj, edition) {
 }
 
 // ── 已知版本关键词（长的优先匹配）─────────────
-const KNOWN_EDITIONS = ['苏教江苏专用','全国人教','苏教','江苏','人教','北师','译林','外研','冀教','青岛','沪教'];
+const KNOWN_EDITIONS = ['苏教江苏专用','全国人教','苏教','江苏','浙江','广东','广州','人教','北师','译林','外研','冀教','青岛','沪教'];
 
 // 英语版本别名映射：苏教版英语 = 译林
 function normalizeEditionForSubject(edStr, subjHint) {
