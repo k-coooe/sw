@@ -15,7 +15,7 @@
     }
     body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
       background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px}
-    .page{max-width:1200px;margin:0 auto}
+    .page{max-width:1000px;margin:0 auto}
 
     /* tabs */
     .tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border)}
@@ -671,6 +671,8 @@ const EDITION_BASES = [
   {key:'人教版精通',tag:'人教精通',blocked:true },
   {key:'精通版',    tag:'人教精通',blocked:true },
   {key:'沪教牛津',  tag:'沪教牛津',blocked:true },
+  // ── 苏教版英语=译林（必须在苏教前匹配，避免被归入苏教数学体系）──
+  {key:'苏教版英语',tag:'译林',   blocked:false},
   // ── 普通版本 ──
   {key:'人教',      tag:'人教',   blocked:false},
   {key:'苏教',      tag:'苏教',   blocked:false},
@@ -1306,11 +1308,18 @@ function normalizeYuEdition(subj, edition) {
 // ── 已知版本关键词（长的优先匹配）─────────────
 const KNOWN_EDITIONS = ['苏教江苏专用','全国人教','苏教','江苏','人教','北师','译林','外研','冀教','青岛','沪教'];
 
-function extractEditionFromDesc(desc) {
+// 英语版本别名映射：苏教版英语 = 译林
+function normalizeEditionForSubject(edStr, subjHint) {
+  // 如果描述含"英语"且含"苏教"→ 归译林
+  if ((subjHint==='英' || edStr.includes('英')) && edStr.includes('苏教')) return '译林';
+  return edStr;
+}
+
+function extractEditionFromDesc(desc, subjHint) {
+  // 英语+苏教 → 直接返回译林
+  if ((subjHint==='英' || desc.includes('英')) && desc.includes('苏教')) return '译林';
   for (const ed of KNOWN_EDITIONS) {
     if (desc.includes(ed)) {
-      // 找到版本基词后，检查原始描述里是否含variant标记（五四制等）
-      // 若有则拼上，让 parseEditionSpec 能正确识别规格
       const variantFound = EDITION_VARIANTS.find(v => desc.includes(v));
       return variantFound ? ed + variantFound : ed;
     }
@@ -1566,10 +1575,13 @@ function matchPlatformSku(p) {
     const GENERIC_WORDS = new Set([
       '语文','数学','英语','政治','综合','语','数','英','政','科',
       '暑假','寒假','春季','秋季','上册','下册','上','下','练习','同步',
+      // 版本别名：不作为系列特征词
+      'PEP','pep','RJ','rj','北师大','人教版','苏教版','译林版',
     ]);
-    // 同时去掉科目词再提取特征词（"暑假作业数学"→去掉"数学"→"暑假作业"→过滤"暑假"→"作业"）
+    // 同时去掉科目词再提取特征词
     const SUBJ_WORDS = ['语文','数学','英语','政治','综合','语','数','英','政','科',
-      '口算','计算','默写','阅读','作文','写字','练字','字帖','书写'];
+      '口算','计算','默写','阅读','作文','写字','练字','字帖','书写',
+      'PEP','pep','RJ','rj'];
     let descStripped = descForMatch;
     for (const sw of SUBJ_WORDS) descStripped = descStripped.replace(new RegExp(sw,'g'),'');
     // 从原始描述和去科目后的描述各提取词，合并
