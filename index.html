@@ -15,7 +15,7 @@
     }
     body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
       background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px}
-    .page{max-width:1000px;margin:0 auto}
+    .page{max-width:1200px;margin:0 auto}
 
     /* tabs */
     .tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border)}
@@ -649,8 +649,11 @@ function yuShuAllowed(yuEd, shuEd) {
 }
 // 语文+英语是否允许配对
 function yuYingAllowed(yuEd, yingEd) {
-  if (isSujiaoYu(yuEd)) return parseEditionSpec(yingEd).base === '译林';
-  return parseEditionSpec(yingEd).base !== '译林';
+  // 译林=苏教（英语体系等价）
+  const ENG_EQUIV = new Set(['译林','苏教']);
+  const yingBase = parseEditionSpec(yingEd).base;
+  if (isSujiaoYu(yuEd)) return ENG_EQUIV.has(yingBase); // 苏教语文→译林或苏教英语
+  return !ENG_EQUIV.has(yingBase); // 人教语文→非译林/苏教英语
 }
 
 // ══════════════════════════════════════════════════════
@@ -720,8 +723,13 @@ function parseEditionSpec(ed) {
 }
 
 // 两个版本是否属于同一规格（base相同 且 variant相同）
-function sameSpec(edA, edB) {
+function sameSpec(edA, edB, subj) {
   const a = parseEditionSpec(edA), b = parseEditionSpec(edB);
+  // 英语科目：译林=苏教（同一体系）
+  const engEquiv = new Set(['译林','苏教']);
+  if (subj==='英' || (!subj && engEquiv.has(a.base) && engEquiv.has(b.base))) {
+    if (engEquiv.has(a.base) && engEquiv.has(b.base)) return a.variant===b.variant;
+  }
   return a.base===b.base && a.variant===b.variant;
 }
 
@@ -774,9 +782,10 @@ function buildCombosForYu(yuw, shuList, engList, allYuList) {
     });
     for (const shu of suShu) {
       results.push([yuw, shu]);
+      // 译林英语=苏教英语，两者等价
       const yilinEng = engList.filter(e=>{
         const es=parseEditionSpec(e.edition);
-        return es.base==='译林' && !es.isWuSiZhi && !es.isBlocked;
+        return (es.base==='译林'||es.base==='苏教') && !es.isWuSiZhi && !es.isBlocked;
       });
       for (const eng of yilinEng) results.push([yuw, shu, eng]);
     }
@@ -813,9 +822,10 @@ function buildCombosForYu(yuw, shuList, engList, allYuList) {
     for (const shu of suShu) {
       results.push([yuw, shu]);
       // 译林英语
+      // 译林英语=苏教英语，两者等价
       const yilinEng = engList.filter(e=>{
         const es=parseEditionSpec(e.edition);
-        return es.base==='译林' && !es.isWuSiZhi && !es.isBlocked;
+        return (es.base==='译林'||es.base==='苏教') && !es.isWuSiZhi && !es.isBlocked;
       });
       for (const eng of yilinEng) results.push([yuw, shu, eng]);
     }
@@ -1606,7 +1616,7 @@ function matchPlatformSku(p) {
         if (r.term==='无' || r.term!==p.term) continue;
       }
       // 版本匹配：平台SKU有版本时验证；单品无版本时允许任意版本匹配
-      if (edKw && r.edition && !sameSpec(edKw, r.edition)) continue;
+      if (edKw && r.edition && !sameSpec(edKw, r.edition, subj)) continue;
 
       const rSeries = r.seriesName || '';
 
@@ -1700,7 +1710,7 @@ function matchPlatformSku(p) {
         const cItems = c.items.filter(i=>i.subject===subj);
         if (!cItems.length) return false;
         // 单品无版本时放行，双方都有版本才做sameSpec比对
-        if (!cItems.some(ci=>!ci.edition || sameSpec(pEd, ci.edition))) return false;
+        if (!cItems.some(ci=>!ci.edition || sameSpec(pEd, ci.edition, subj))) return false;
       }
       return true;
     }
