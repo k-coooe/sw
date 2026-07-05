@@ -132,12 +132,12 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <!-- 左侧Logo -->
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-fin-accent to-blue-600 flex items-center justify-center shadow-lg">
+                <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div class="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-fin-accent to-blue-600 flex items-center justify-center shadow-lg">
                         <i class="fa-solid fa-chart-line text-white text-sm"></i>
                     </div>
-                    <div>
-                        <a href="https://tool.xuecan.net/compound-interest-calculator/" class="text-fin-text font-bold text-lg tracking-tight hover:text-fin-accent transition-colors">复利计算器 Pro</a>
+                    <div class="min-w-0">
+                        <a href="https://tool.xuecan.net/compound-interest-calculator/" class="text-fin-text font-bold text-sm sm:text-lg tracking-tight hover:text-fin-accent transition-colors truncate block">复利计算器 Pro</a>
                     </div>
                 </div>
                 
@@ -155,13 +155,10 @@
                 </div>
                 
                 <!-- 右侧功能按钮 -->
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 shrink-0">
                     <!-- 明暗主题切换 -->
                     <button id="themeToggle" onclick="toggleTheme()" class="theme-toggle-btn" title="切换明暗主题" aria-label="切换明暗主题">
                         <span class="knob"><i id="themeIcon" class="fa-solid fa-sun"></i></span>
-                    </button>
-                    <button class="md:hidden p-2 rounded-full hover:bg-fin-panel transition-colors">
-                        <i class="fa-solid fa-bars text-fin-muted"></i>
                     </button>
                 </div>
             </div>
@@ -175,7 +172,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-10">
                 
                 <!-- Left Panel: Input Controls -->
-                <div id="calculator" class="lg:col-span-3 bg-fin-panel border border-fin-border rounded-2xl p-6 shadow-xl h-fit sticky top-24">
+                <div id="calculator" class="lg:col-span-3 bg-fin-panel border border-fin-border rounded-2xl p-6 shadow-xl h-fit lg:sticky lg:top-24">
                     <h2 class="text-lg font-semibold mb-6 flex items-center gap-2 border-b border-fin-border pb-3">
                         <i class="fa-solid fa-sliders text-fin-muted"></i> 参数控制台
                     </h2>
@@ -290,11 +287,11 @@
                     </div>
 
                     <!-- 导出按钮组 -->
-                    <div class="flex justify-end gap-3">
-                        <button onclick="exportData('csv')" class="px-4 py-2 bg-fin-panel hover:bg-fin-border border border-fin-border rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                    <div class="flex flex-wrap justify-end gap-3">
+                        <button onclick="exportData('csv')" class="flex-1 sm:flex-none justify-center px-4 py-2 bg-fin-panel hover:bg-fin-border border border-fin-border rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                             <i class="fa-solid fa-file-csv text-fin-primary"></i> 导出 CSV
                         </button>
-                        <button onclick="exportData('image')" class="px-4 py-2 bg-fin-panel hover:bg-fin-border border border-fin-border rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                        <button onclick="exportData('image')" class="flex-1 sm:flex-none justify-center px-4 py-2 bg-fin-panel hover:bg-fin-border border border-fin-border rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                             <i class="fa-solid fa-image text-fin-accent"></i> 导出图表
                         </button>
                     </div>
@@ -390,16 +387,16 @@
                             <i class="fa-solid fa-table-list text-fin-muted mr-2"></i>逐年数据推演明细
                         </h3>
                     </div>
-                    <div class="max-h-[70vh] overflow-y-auto">
-                        <table class="w-full text-sm text-left">
+                    <div class="max-h-[70vh] overflow-y-auto overflow-x-auto">
+                        <table class="w-full min-w-[640px] text-sm text-left">
                             <thead class="text-xs text-fin-muted uppercase bg-fin-bg sticky top-0 shadow-sm z-10">
                                 <tr>
-                                    <th scope="col" class="px-6 py-4 font-medium">年份</th>
-                                    <th scope="col" class="px-6 py-4 font-medium text-right">期初本金</th>
-                                    <th scope="col" class="px-6 py-4 font-medium text-right">当年追加</th>
-                                    <th scope="col" class="px-6 py-4 font-medium text-right">当年利息</th>
-                                    <th scope="col" class="px-6 py-4 font-medium text-right">累计总收益</th>
-                                    <th scope="col" class="px-6 py-4 font-medium text-right text-fin-accent">期末总资产</th>
+                                    <th scope="col" class="px-3 sm:px-6 py-4 font-medium">年份</th>
+                                    <th scope="col" class="px-3 sm:px-6 py-4 font-medium text-right">期初本金</th>
+                                    <th scope="col" class="px-3 sm:px-6 py-4 font-medium text-right">当年追加</th>
+                                    <th scope="col" class="px-3 sm:px-6 py-4 font-medium text-right">当年利息</th>
+                                    <th scope="col" class="px-3 sm:px-6 py-4 font-medium text-right">累计总收益</th>
+                                    <th scope="col" class="px-3 sm:px-6 py-4 font-medium text-right text-fin-accent">期末总资产</th>
                                 </tr>
                             </thead>
                             <tbody id="tableBody" class="divide-y divide-fin-border/50 text-gray-300 font-mono">
@@ -802,12 +799,12 @@
                 tr.className = `hover:bg-fin-border/30 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-fin-bg/30'}`;
                 
                 tr.innerHTML = `
-                    <td class="px-6 py-3 whitespace-nowrap">第 ${row.year} 年</td>
-                    <td class="px-6 py-3 whitespace-nowrap text-right">${formatMoney(row.startBalance)}</td>
-                    <td class="px-6 py-3 whitespace-nowrap text-right text-fin-muted">+ ${formatMoney(row.contribution)}</td>
-                    <td class="px-6 py-3 whitespace-nowrap text-right text-fin-muted">+ ${formatMoney(row.interestEarned)}</td>
-                    <td class="px-6 py-3 whitespace-nowrap text-right text-purple-400">${formatMoney(row.totalInterest)}</td>
-                    <td class="px-6 py-3 whitespace-nowrap text-right text-fin-accent font-bold">${formatMoney(row.endBalance)}</td>
+                    <td class="px-3 sm:px-6 py-3 whitespace-nowrap">第 ${row.year} 年</td>
+                    <td class="px-3 sm:px-6 py-3 whitespace-nowrap text-right">${formatMoney(row.startBalance)}</td>
+                    <td class="px-3 sm:px-6 py-3 whitespace-nowrap text-right text-fin-muted">+ ${formatMoney(row.contribution)}</td>
+                    <td class="px-3 sm:px-6 py-3 whitespace-nowrap text-right text-fin-muted">+ ${formatMoney(row.interestEarned)}</td>
+                    <td class="px-3 sm:px-6 py-3 whitespace-nowrap text-right text-purple-400">${formatMoney(row.totalInterest)}</td>
+                    <td class="px-3 sm:px-6 py-3 whitespace-nowrap text-right text-fin-accent font-bold">${formatMoney(row.endBalance)}</td>
                 `;
                 tbody.appendChild(tr);
             });
