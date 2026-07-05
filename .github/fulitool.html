@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="https://tool.xuecan.net/favicon.ico" type="image/x-icon">
+    <title>复利计算器 - 专业财富复利增长计算 | 定投收益可视化分析工具</title>
+    <meta name="description" content="免费专业级复利计算器，支持按日/周/月/按年定投、自定义收益率、复利计息频次，实时生成财富增长曲线与逐年数据明细，支持导出图表与CSV，助力长期投资规划。">
+    <meta name="keywords" content="复利计算器,定投计算器,收益计算,投资分析,雪球效应,年化收益率,资产增值">
+    <meta name="author" content="复利计算器">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph 社交分享 -->
+    <meta property="og:title" content="复利计算器 Pro - 专业财富复利增长计算">
+    <meta property="og:description" content="免费专业级复利计算器，支持定投、可视化增长曲线、数据导出，精准模拟长期财富积累。">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="zh_CN">
+
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        fin: {
+                            bg: ({ opacityValue }) => opacityValue ? `rgb(var(--fin-bg-rgb) / ${opacityValue})` : `rgb(var(--fin-bg-rgb))`,
+                            panel: ({ opacityValue }) => opacityValue ? `rgb(var(--fin-panel-rgb) / ${opacityValue})` : `rgb(var(--fin-panel-rgb))`,
+                            border: ({ opacityValue }) => opacityValue ? `rgb(var(--fin-border-rgb) / ${opacityValue})` : `rgb(var(--fin-border-rgb))`,
+                            accent: '#10B981',   // 翠绿色 (收益) - 明暗主题通用
+                            primary: '#3B82F6',  // 科技蓝 (本金) - 明暗主题通用
+                            text: ({ opacityValue }) => opacityValue ? `rgb(var(--fin-text-rgb) / ${opacityValue})` : `rgb(var(--fin-text-rgb))`,
+                            muted: ({ opacityValue }) => opacityValue ? `rgb(var(--fin-muted-rgb) / ${opacityValue})` : `rgb(var(--fin-muted-rgb))`
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- FontAwesome (CDN) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* 明亮主题 (默认) 变量，均为 R G B 三元组，便于配合透明度修饰符使用 */
+        :root {
+            --fin-bg-rgb: 244 246 250;
+            --fin-panel-rgb: 255 255 255;
+            --fin-border-rgb: 226 232 240;
+            --fin-text-rgb: 15 23 42;
+            --fin-muted-rgb: 100 116 139;
+            --fin-nav-scrolled: rgba(255, 255, 255, 0.92);
+        }
+        /* 深色主题变量 (给 <html> 加 .dark 类后生效) */
+        html.dark {
+            --fin-bg-rgb: 11 17 33;
+            --fin-panel-rgb: 21 30 50;
+            --fin-border-rgb: 42 54 79;
+            --fin-text-rgb: 241 245 249;
+            --fin-muted-rgb: 148 163 184;
+            --fin-nav-scrolled: rgba(11, 17, 33, 0.95);
+        }
+
+        /* 自定义滚动条样式 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgb(var(--fin-bg-rgb)); }
+        ::-webkit-scrollbar-thumb { background: rgb(var(--fin-border-rgb)); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+        
+        /* 移除数字输入框的上下箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; margin: 0; 
+        }
+        input[type=number] { -moz-appearance: textfield; }
+
+        /* 卡片悬停发光效果 */
+        .glow-card { transition: all 0.3s ease; }
+        .glow-card:hover { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); }
+        
+        /* 公式渲染辅助 */
+        .math-fraction { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 0.2em; }
+        .math-numerator { border-bottom: 1px solid currentColor; padding: 0 0.1em; font-size: 0.8em; line-height: 1.2; }
+        .math-denominator { padding: 0 0.1em; font-size: 0.8em; line-height: 1.2; }
+        
+        /* 导航栏滚动效果 */
+        .nav-scrolled {
+            background-color: var(--fin-nav-scrolled) !important;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        /* 主题切换按钮 */
+        .theme-toggle-btn {
+            position: relative;
+            width: 44px; height: 24px;
+            border-radius: 999px;
+            background: var(--fin-border);
+            transition: background 0.3s ease;
+            display: inline-flex; align-items: center;
+            cursor: pointer; border: none; padding: 0;
+        }
+        .theme-toggle-btn .knob {
+            position: absolute; top: 2px; left: 2px;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px;
+            transition: transform 0.3s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        html.dark .theme-toggle-btn .knob { transform: translateX(20px); color: #151E32; }
+        .theme-toggle-btn .knob { color: #F59E0B; }
+
+        /* 全局过渡，切换主题时更顺滑 */
+        body, nav, .glow-card, #calculator, [class*="bg-fin-"], [class*="border-fin-"] {
+            transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-fin-bg text-fin-text font-sans antialiased min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <nav id="mainNav" class="fixed w-full z-50 transition-all duration-300 bg-fin-bg/80 backdrop-blur-sm border-b border-fin-border/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- 左侧Logo -->
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-fin-accent to-blue-600 flex items-center justify-center shadow-lg">
+                        <i class="fa-solid fa-chart-line text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <a href="https://tool.xuecan.net/compound-interest-calculator/" class="text-fin-text font-bold text-lg tracking-tight hover:text-fin-accent transition-colors">复利计算器 Pro</a>
+                    </div>
+                </div>
+                
+                <!-- 中间导航菜单 -->
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#calculator" class="text-fin-text hover:text-fin-accent transition-colors text-sm font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-calculator text-xs"></i> 计算器
+                    </a>
+                    <a href="#principle" class="text-fin-muted hover:text-fin-accent transition-colors text-sm font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-book-open text-xs"></i> 复利原理
+                    </a>
+                    <a href="#data" class="text-fin-muted hover:text-fin-accent transition-colors text-sm font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-table text-xs"></i> 数据明细
+                    </a>
+                </div>
+                
+                <!-- 右侧功能按钮 -->
+                <div class="flex items-center gap-3">
+                    <!-- 明暗主题切换 -->
+                    <button id="themeToggle" onclick="toggleTheme()" class="theme-toggle-btn" title="切换明暗主题" aria-label="切换明暗主题">
+                        <span class="knob"><i id="themeIcon" class="fa-solid fa-sun"></i></span>
+                    </button>
+                    <button class="md:hidden p-2 rounded-full hover:bg-fin-panel transition-colors">
+                        <i class="fa-solid fa-bars text-fin-muted"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <main class="flex-grow pt-24 pb-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Main Grid Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-10">
+                
+                <!-- Left Panel: Input Controls -->
+                <div id="calculator" class="lg:col-span-3 bg-fin-panel border border-fin-border rounded-2xl p-6 shadow-xl h-fit sticky top-24">
+                    <h2 class="text-lg font-semibold mb-6 flex items-center gap-2 border-b border-fin-border pb-3">
+                        <i class="fa-solid fa-sliders text-fin-muted"></i> 参数控制台
+                    </h2>
+                    
+                    <form id="calcForm" class="space-y-5">
+                        <!-- 初始本金 -->
+                        <div>
+                            <label class="block text-sm font-medium text-fin-muted mb-1.5">初始本金 (¥)</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fa-solid fa-wallet text-fin-muted"></i>
+                                </div>
+                                <input type="number" id="principal" value="10000" min="0" step="1000" class="w-full bg-fin-bg border border-fin-border rounded-lg py-2.5 pl-10 pr-3 text-fin-text focus:outline-none focus:border-fin-accent focus:ring-1 focus:ring-fin-accent transition-colors">
+                            </div>
+                        </div>
+
+                        <!-- 定期追加 -->
+                        <div class="p-4 bg-fin-bg/50 rounded-xl border border-fin-border/50">
+                            <label class="block text-sm font-medium text-fin-muted mb-1.5">每次定期追加 (¥)</label>
+                            <div class="flex gap-2 mb-2">
+                                <input type="number" id="contribution" value="2000" min="0" step="100" class="w-full bg-fin-bg border border-fin-border rounded-lg py-2 px-3 text-fin-text focus:outline-none focus:border-fin-primary focus:ring-1 focus:ring-fin-primary transition-colors">
+                            </div>
+                            <!-- 追加频次 -->
+                            <select id="contributionFreq" class="w-full bg-fin-bg border border-fin-border rounded-lg py-2 px-3 text-fin-text focus:outline-none focus:border-fin-primary transition-colors text-sm mb-2">
+                                <option value="365">每日追加 (Daily)</option>
+                                <option value="52">每周追加 (Weekly)</option>
+                                <option value="12" selected>每月追加 (Monthly)</option>
+                                <option value="1">每年追加 (Annually)</option>
+                            </select>
+                            <!-- 追加时机 (新增专业级选项) -->
+                            <select id="contributionTiming" class="w-full bg-fin-bg border border-fin-border rounded-lg py-2 px-3 text-fin-text focus:outline-none focus:border-fin-primary transition-colors text-sm">
+                                <option value="end">期末追加 (如: 月末结余存入)</option>
+                                <option value="start">期初追加 (如: 月初发薪即存)</option>
+                            </select>
+                        </div>
+
+                        <!-- 年化收益率 -->
+                        <div>
+                            <label class="block text-sm font-medium text-fin-muted mb-1.5">预期年化收益率 (%)</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <i class="fa-solid fa-arrow-trend-up text-fin-muted"></i>
+                                </div>
+                                <input type="number" id="rate" value="8.0" min="0" max="100" step="0.1" class="w-full bg-fin-bg border border-fin-border rounded-lg py-2.5 pl-10 pr-8 text-fin-text focus:outline-none focus:border-fin-accent focus:ring-1 focus:ring-fin-accent transition-colors">
+                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                    <span class="text-fin-muted">%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 投资年限 -->
+                        <div>
+                            <label class="flex justify-between text-sm font-medium text-fin-muted mb-1.5">
+                                <span>投资年限 (年)</span>
+                                <span id="yearsLabel" class="text-fin-accent font-mono font-bold">10 年</span>
+                            </label>
+                            <input type="range" id="years" min="1" max="50" value="10" class="w-full h-2 bg-fin-border rounded-lg appearance-none cursor-pointer accent-fin-accent">
+                        </div>
+
+                        <!-- 复利频次 -->
+                        <div>
+                            <label class="block text-sm font-medium text-fin-muted mb-1.5">复利计息频次</label>
+                            <select id="compoundFreq" class="w-full bg-fin-bg border border-fin-border rounded-lg py-2.5 px-3 text-fin-text focus:outline-none focus:border-fin-accent transition-colors">
+                                <option value="365">每日 (Daily)</option>
+                                <option value="52">每周 (Weekly)</option>
+                                <option value="12" selected>每月 (Monthly)</option>
+                                <option value="4">每季度 (Quarterly)</option>
+                                <option value="2">每半年 (Semi-Annually)</option>
+                                <option value="1">每年 (Annually)</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Right Panel: Dashboard & Chart -->
+                <div class="lg:col-span-9 flex flex-col gap-6">
+                    
+                    <!-- KPI Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- 最终总资产 -->
+                        <div class="glow-card bg-gradient-to-br from-fin-panel to-fin-bg border border-fin-border rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-fin-accent opacity-10 rounded-full blur-xl"></div>
+                            <p class="text-fin-muted text-sm font-medium mb-1">期末最终总资产</p>
+                            <h3 class="text-3xl font-bold text-fin-text font-mono tracking-tight flex items-baseline gap-1">
+                                <span class="text-lg text-fin-accent">¥</span>
+                                <span id="resTotal" class="anim-number">0.00</span>
+                            </h3>
+                            <p class="text-xs text-fin-accent mt-2"><i class="fa-solid fa-arrow-up-right-dots mr-1"></i>滚雪球效应显现</p>
+                        </div>
+
+                        <!-- 投入总本金 -->
+                        <div class="bg-fin-panel border border-fin-border rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-fin-primary opacity-10 rounded-full blur-xl"></div>
+                            <p class="text-fin-muted text-sm font-medium mb-1">累计投入本金</p>
+                            <h3 class="text-2xl font-bold text-fin-text font-mono tracking-tight mt-1 flex items-baseline gap-1">
+                                <span class="text-base text-fin-primary">¥</span>
+                                <span id="resPrincipal" class="anim-number">0.00</span>
+                            </h3>
+                            <p class="text-xs text-fin-muted mt-2">初始资金 + 定期追加</p>
+                        </div>
+
+                        <!-- 累计总收益 -->
+                        <div class="bg-fin-panel border border-fin-border rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-purple-500 opacity-10 rounded-full blur-xl"></div>
+                            <p class="text-fin-muted text-sm font-medium mb-1">累计复利收益</p>
+                            <h3 class="text-2xl font-bold text-fin-text font-mono tracking-tight mt-1 flex items-baseline gap-1">
+                                <span class="text-base text-purple-400">¥</span>
+                                <span id="resInterest" class="anim-number">0.00</span>
+                            </h3>
+                            <p class="text-xs text-fin-muted mt-2">时间带来的纯利息</p>
+                        </div>
+                    </div>
+
+                    <!-- 导出按钮组 -->
+                    <div class="flex justify-end gap-3">
+                        <button onclick="exportData('csv')" class="px-4 py-2 bg-fin-panel hover:bg-fin-border border border-fin-border rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                            <i class="fa-solid fa-file-csv text-fin-primary"></i> 导出 CSV
+                        </button>
+                        <button onclick="exportData('image')" class="px-4 py-2 bg-fin-panel hover:bg-fin-border border border-fin-border rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                            <i class="fa-solid fa-image text-fin-accent"></i> 导出图表
+                        </button>
+                    </div>
+
+                    <!-- Chart Area: 增长曲线 + 余额构成圆环图 -->
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1">
+                        <div class="xl:col-span-2 bg-fin-panel border border-fin-border rounded-2xl p-4 md:p-6 shadow-xl min-h-[400px]">
+                            <div class="flex justify-between items-center mb-4">
+                                <h2 class="text-lg font-semibold text-fin-text">财富增长曲线 (雪球效应)</h2>
+                                <div class="flex gap-3 text-xs text-fin-muted">
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-fin-primary"></span> 投入本金</span>
+                                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-fin-accent"></span> 复利收益</span>
+                                </div>
+                            </div>
+                            <div class="relative h-[350px] w-full">
+                                <canvas id="growthChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 余额构成圆环图 (参考 toolv 的可视化设计) -->
+                        <div class="bg-fin-panel border border-fin-border rounded-2xl p-4 md:p-6 shadow-xl min-h-[400px] flex flex-col">
+                            <h2 class="text-lg font-semibold text-fin-text mb-4">期末余额构成</h2>
+                            <div class="relative flex-1 flex items-center justify-center">
+                                <canvas id="compositionChart"></canvas>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <span id="compositionPct" class="text-2xl font-bold text-fin-accent font-mono">0%</span>
+                                    <span class="text-xs text-fin-muted mt-1">收益占比</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-center gap-4 text-xs text-fin-muted mt-4">
+                                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-fin-primary"></span> 本金</span>
+                                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-fin-accent"></span> 收益</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Section: Theory & Data Table -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Theory / Formula -->
+                <div id="principle" class="lg:col-span-1 bg-fin-panel border border-fin-border rounded-2xl p-6 shadow-xl">
+                    <h3 class="text-lg font-semibold mb-4 text-fin-text border-b border-fin-border pb-2">
+                        <i class="fa-solid fa-square-root-variable text-fin-muted mr-2"></i>原理解析
+                    </h3>
+                    
+                    <div class="bg-fin-bg rounded-xl p-4 border border-fin-border/50 text-center mb-4">
+                        <p class="text-fin-muted text-xs mb-2">标准复利计算公式 (离散型)</p>
+                        <div class="text-2xl font-serif italic text-fin-text flex items-center justify-center">
+                            A = P <span class="mx-1">(</span> 1 + 
+                            <div class="math-fraction text-fin-accent">
+                                <span class="math-numerator">r</span>
+                                <span class="math-denominator">n</span>
+                            </div>
+                            <span class="mx-1">)</span><sup class="text-sm -mt-4 text-fin-primary">nt</sup>
+                        </div>
+                    </div>
+
+                    <ul class="space-y-3 text-sm text-fin-muted">
+                        <li class="flex items-start gap-2">
+                            <span class="font-mono text-fin-text w-4">A</span> 
+                            <span><strong class="text-gray-300">最终总资产</strong> (Future Value)</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="font-mono text-fin-primary w-4">P</span> 
+                            <span><strong class="text-gray-300">初始本金</strong> (Principal)</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="font-mono text-fin-accent w-4">r</span> 
+                            <span><strong class="text-gray-300">年化收益率</strong> (Annual Interest Rate)，如 8% 即 0.08</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="font-mono text-fin-text w-4">n</span> 
+                            <span><strong class="text-gray-300">复利频次</strong> (一年内计息的次数)</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="font-mono text-fin-primary w-4">t</span> 
+                            <span><strong class="text-gray-300">投资年限</strong> (Years)</span>
+                        </li>
+                    </ul>
+                    <div class="mt-4 text-xs text-fin-muted/70 bg-fin-bg/30 p-3 rounded-lg space-y-2">
+                        <p>*注：引擎采用动态周期等效利率映射算法（Effective Period Rate），完美匹配各种复利计息与定投频次。</p>
+                        <p>*<span class="text-fin-accent">期末追加 (普通年金)</span>：先基于已有本金结息，期末存入的资金本期不计息。</p>
+                        <p>*<span class="text-fin-primary">期初追加 (预付年金)</span>：存入资金立刻参与本期的复利滚动，收益相对更高。</p>
+                    </div>
+                </div>
+
+                <!-- Yearly Breakdown Table -->
+                <div id="data" class="lg:col-span-2 bg-fin-panel border border-fin-border rounded-2xl shadow-xl overflow-hidden flex flex-col">
+                    <div class="p-5 border-b border-fin-border flex justify-between items-center bg-fin-panel z-10">
+                        <h3 class="text-lg font-semibold text-fin-text">
+                            <i class="fa-solid fa-table-list text-fin-muted mr-2"></i>逐年数据推演明细
+                        </h3>
+                    </div>
+                    <div class="max-h-[70vh] overflow-y-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-fin-muted uppercase bg-fin-bg sticky top-0 shadow-sm z-10">
+                                <tr>
+                                    <th scope="col" class="px-6 py-4 font-medium">年份</th>
+                                    <th scope="col" class="px-6 py-4 font-medium text-right">期初本金</th>
+                                    <th scope="col" class="px-6 py-4 font-medium text-right">当年追加</th>
+                                    <th scope="col" class="px-6 py-4 font-medium text-right">当年利息</th>
+                                    <th scope="col" class="px-6 py-4 font-medium text-right">累计总收益</th>
+                                    <th scope="col" class="px-6 py-4 font-medium text-right text-fin-accent">期末总资产</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody" class="divide-y divide-fin-border/50 text-gray-300 font-mono">
+                                <!-- Rows generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- 底部版权区域 -->
+    <footer class="bg-fin-panel border-t border-fin-border py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <!-- 左侧信息 -->
+                <div class="text-center md:text-left">
+                    <div class="flex items-center justify-center md:justify-start gap-2 mb-2">
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-fin-accent to-blue-600 flex items-center justify-center shadow-lg">
+                            <i class="fa-solid fa-chart-line text-white text-sm"></i>
+                        </div>
+                        <a href="https://tool.xuecan.net/compound-interest-calculator/" class="text-fin-text font-bold hover:text-fin-accent transition-colors">复利计算器专业版</a>
+                    </div>
+                    <p class="text-fin-muted text-sm">专业级复利推演工具 | 助力长期财富规划</p>
+                </div>
+                
+                <!-- 中间分隔 -->
+                <div class="hidden md:block h-10 w-px bg-fin-border"></div>
+                
+                <!-- 右侧版权 - 自动年份 -->
+                <div class="text-center md:text-right">
+                    <p class="text-fin-muted text-sm">&copy; <span id="currentYear"></span> <a href="https://tool.xuecan.net/compound-interest-calculator/" class="hover:text-fin-accent transition-colors">在线复利计算器</a>. 计算结果仅供参考，本站不做任何承诺和保证。</p>
+                    <p class="text-fin-muted/70 text-xs mt-1">本工具仅作参考，不构成任何投资建议。</p>
+                </div>
+            </div>
+            
+            <!-- 底部链接 -->
+            <div class="mt-6 pt-6 border-t border-fin-border/30 flex flex-wrap justify-center gap-6 text-sm">
+                <a href="#" class="text-fin-muted hover:text-fin-accent transition-colors">使用条款</a>
+                <a href="https://tool.xuecan.net/privacy.html" target="_blank" class="text-fin-muted hover:text-fin-accent transition-colors">隐私政策</a>
+                <a href="https://tool.xuecan.net/contact.html" target="_blank" class="text-fin-muted hover:text-fin-accent transition-colors">联系我们</a>
+                <a href="https://tool.xuecan.net/" target="_blank" class="text-fin-muted hover:text-fin-accent transition-colors">更多实用工具</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Application Logic -->
+    <script>
+        // --- 核心计算与状态管理 ---
+        let myChart = null;
+        let compositionChart = null; // 余额构成圆环图 (对标 toolv 的可视化功能)
+
+        // --- 主题切换 (默认亮色，可切换深色；本页面不做任何本地持久化/上传，仅内存状态) ---
+        const isDarkMode = () => document.documentElement.classList.contains('dark');
+
+        const getChartPalette = () => {
+            if (isDarkMode()) {
+                return {
+                    tick: '#94A3B8', grid: 'rgba(148, 163, 184, 0.15)',
+                    canvasBg: '#151E32',
+                    tooltipBg: 'rgba(15, 23, 42, 0.9)', tooltipTitle: '#F8FAFC', tooltipBody: '#CBD5E1', tooltipBorder: '#334155'
+                };
+            }
+            return {
+                tick: '#64748B', grid: 'rgba(100, 116, 139, 0.12)',
+                canvasBg: '#FFFFFF',
+                tooltipBg: 'rgba(255, 255, 255, 0.96)', tooltipTitle: '#0F172A', tooltipBody: '#334155', tooltipBorder: '#E2E8F0'
+            };
+        };
+
+        const toggleTheme = () => {
+            const html = document.documentElement;
+            const nowDark = !isDarkMode();
+            html.classList.toggle('dark', nowDark);
+            document.getElementById('themeIcon').className = nowDark ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+
+            // 主题切换后重建图表，确保配色（网格线/提示框/画布底色）与新主题一致
+            if (myChart) { myChart.destroy(); myChart = null; }
+            if (compositionChart) { compositionChart.destroy(); compositionChart = null; }
+            updateUI();
+        };
+
+        // 格式化货币
+        const formatMoney = (amount) => {
+            return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+        };
+
+        // 数字滚动动画
+        const animateValue = (id, start, end, duration) => {
+            const obj = document.getElementById(id);
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                // 使用 easeOutQuart 缓动函数让滚动更自然
+                const easeOut = 1 - Math.pow(1 - progress, 4);
+                const current = start + (end - start) * easeOut;
+                obj.innerHTML = formatMoney(current);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    obj.innerHTML = formatMoney(end); // 确保最终值精确
+                }
+            };
+            window.requestAnimationFrame(step);
+        };
+
+        // 获取并解析输入
+        const getInputs = () => {
+            return {
+                principal: parseFloat(document.getElementById('principal').value) || 0,
+                contribution: parseFloat(document.getElementById('contribution').value) || 0,
+                contFreq: parseInt(document.getElementById('contributionFreq').value) || 12, 
+                timing: document.getElementById('contributionTiming').value, // 新增：期初/期末
+                rate: (parseFloat(document.getElementById('rate').value) || 0) / 100,
+                years: parseInt(document.getElementById('years').value) || 0,
+                compFreq: parseInt(document.getElementById('compoundFreq').value) || 12
+            };
+        };
+
+        // 核心模拟引擎 (支持期初/期末年金模型，保留浮点运算的高性能架构)
+        const simulateCompoundInterest = (inputs) => {
+            const { principal, contribution, contFreq, timing, rate, years, compFreq } = inputs;
+            
+            // 核心等效利率 (兼容rate=0的情况，数学上自然返回0)
+            const effectivePeriodRate = Math.pow(1 + rate / compFreq, compFreq / contFreq) - 1;
+
+            let currentBalance = principal;
+            let totalPrincipal = principal;
+            let yearlyData = [];
+            
+            // 用于图表的数据
+            let chartLabels = [0];
+            let chartPrincipal = [principal];
+            let chartInterest = [0];
+
+            // 循环每一年
+            for (let y = 1; y <= years; y++) {
+                let yearStartBalance = currentBalance;
+                let yearContribution = 0;
+
+                // 按周期循环推进
+                for (let p = 1; p <= contFreq; p++) {
+                    if (timing === 'start') {
+                        // 【期初追加 - Annuity Due】
+                        // 本金先入账，直接参与当期复利滚动
+                        currentBalance += contribution;
+                        totalPrincipal += contribution;
+                        yearContribution += contribution;
+                        
+                        let interestThisPeriod = currentBalance * effectivePeriodRate;
+                        currentBalance += interestThisPeriod;
+                    } else {
+                        // 【期末追加 - Ordinary Annuity】(默认模型)
+                        // 基于期初结余算利息，新入账的本金本期不生息
+                        let interestThisPeriod = currentBalance * effectivePeriodRate;
+                        currentBalance += interestThisPeriod;
+                        
+                        currentBalance += contribution;
+                        totalPrincipal += contribution;
+                        yearContribution += contribution;
+                    }
+                }
+
+                let totalInterest = currentBalance - totalPrincipal;
+                let interestEarnedThisYear = currentBalance - yearStartBalance - yearContribution;
+
+                yearlyData.push({
+                    year: y,
+                    startBalance: yearStartBalance,
+                    contribution: yearContribution,
+                    interestEarned: Math.max(0, interestEarnedThisYear), // 极其轻量级的UI兜底防线，抵御浮点数显示负号 (-1e-14)
+                    totalInterest: totalInterest,
+                    totalPrincipal: totalPrincipal,
+                    endBalance: currentBalance
+                });
+
+                chartLabels.push(y);
+                chartPrincipal.push(totalPrincipal);
+                chartInterest.push(totalInterest);
+            }
+
+            return {
+                finalBalance: currentBalance,
+                finalPrincipal: totalPrincipal,
+                finalInterest: currentBalance - totalPrincipal,
+                yearlyData,
+                chartData: { labels: chartLabels, principal: chartPrincipal, interest: chartInterest }
+            };
+        };
+
+        // 更新 UI
+        let lastValues = { total: 0, principal: 0, interest: 0 };
+        const updateUI = () => {
+            const inputs = getInputs();
+            const result = simulateCompoundInterest(inputs);
+
+            // 1. 触发数字滚动动画
+            animateValue('resTotal', lastValues.total, result.finalBalance, 800);
+            animateValue('resPrincipal', lastValues.principal, result.finalPrincipal, 800);
+            animateValue('resInterest', lastValues.interest, result.finalInterest, 800);
+            
+            lastValues = {
+                total: result.finalBalance,
+                principal: result.finalPrincipal,
+                interest: result.finalInterest
+            };
+
+            // 2. 更新图表
+            updateChart(result.chartData);
+
+            // 2b. 更新余额构成圆环图
+            updateCompositionChart(result.finalPrincipal, result.finalInterest);
+
+            // 3. 更新表格
+            updateTable(result.yearlyData);
+        };
+
+        // 初始化和更新 Chart.js
+        const updateChart = (data) => {
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            
+            if (myChart) {
+                myChart.data.labels = data.labels;
+                myChart.data.datasets[0].data = data.principal;
+                myChart.data.datasets[1].data = data.interest;
+                myChart.update();
+                return;
+            }
+
+            const palette = getChartPalette();
+            Chart.defaults.color = palette.tick;
+            Chart.defaults.font.family = 'Inter, sans-serif';
+
+            const customCanvasBackgroundColor = {
+                id: 'customCanvasBackgroundColor',
+                beforeDraw: (chart, args, options) => {
+                    const {ctx} = chart;
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'destination-over';
+                    ctx.fillStyle = options.color || palette.canvasBg;
+                    ctx.fillRect(0, 0, chart.width, chart.height);
+                    ctx.restore();
+                }
+            };
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels.map(y => y === 0 ? 'Start' : `第 ${y} 年`),
+                    datasets: [
+                        {
+                            label: '累计投入本金',
+                            data: data.principal,
+                            borderColor: '#3B82F6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHitRadius: 10
+                        },
+                        {
+                            label: '累计复利收益',
+                            data: data.interest,
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHitRadius: 10
+                        }
+                    ]
+                },
+                plugins: [customCanvasBackgroundColor],
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        customCanvasBackgroundColor: { color: palette.canvasBg },
+                        tooltip: {
+                            backgroundColor: palette.tooltipBg,
+                            titleColor: palette.tooltipTitle,
+                            bodyColor: palette.tooltipBody,
+                            borderColor: palette.tooltipBorder,
+                            borderWidth: 1,
+                            padding: 10,
+                            boxPadding: 4,
+                            usePointStyle: true,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        label += '¥ ' + formatMoney(context.parsed.y);
+                                    }
+                                    return label;
+                                },
+                                footer: function(tooltipItems) {
+                                    let total = 0;
+                                    tooltipItems.forEach(function(tooltipItem) {
+                                        total += tooltipItem.parsed.y;
+                                    });
+                                    return '总资产: ¥ ' + formatMoney(total);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: palette.grid, drawBorder: false },
+                            ticks: { maxTicksLimit: 10 }
+                        },
+                        y: {
+                            stacked: true,
+                            grid: { color: palette.grid, drawBorder: false },
+                            ticks: {
+                                callback: function(value) {
+                                    if (value >= 10000) {
+                                        return '¥' + (value / 10000).toFixed(1) + '万';
+                                    }
+                                    return '¥' + value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        };
+
+        // 更新/初始化 余额构成圆环图 (对标 toolv 的"余额构成"可视化功能，直观展示本金与收益占比)
+        const updateCompositionChart = (finalPrincipal, finalInterest) => {
+            const canvas = document.getElementById('compositionChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const palette = getChartPalette();
+            const total = finalPrincipal + finalInterest;
+
+            if (compositionChart) {
+                compositionChart.data.datasets[0].data = [finalPrincipal, finalInterest];
+                compositionChart.update();
+            } else {
+                compositionChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['累计投入本金', '累计复利收益'],
+                        datasets: [{
+                            data: [finalPrincipal, finalInterest],
+                            backgroundColor: ['#3B82F6', '#10B981'],
+                            borderColor: palette.canvasBg,
+                            borderWidth: 3,
+                            hoverOffset: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '68%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: palette.tooltipBg,
+                                titleColor: palette.tooltipTitle,
+                                bodyColor: palette.tooltipBody,
+                                borderColor: palette.tooltipBorder,
+                                borderWidth: 1,
+                                callbacks: {
+                                    label: function(context) {
+                                        const pct = total > 0 ? (context.parsed / total * 100).toFixed(1) : '0.0';
+                                        return `${context.label}: ¥${formatMoney(context.parsed)} (${pct}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // 中心文字：收益占比
+            const pctEl = document.getElementById('compositionPct');
+            if (pctEl) {
+                const pct = total > 0 ? (finalInterest / total * 100).toFixed(1) : '0.0';
+                pctEl.textContent = pct + '%';
+            }
+        };
+
+        // 渲染表格
+        const updateTable = (yearlyData) => {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            yearlyData.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = `hover:bg-fin-border/30 transition-colors ${index % 2 === 0 ? 'bg-transparent' : 'bg-fin-bg/30'}`;
+                
+                tr.innerHTML = `
+                    <td class="px-6 py-3 whitespace-nowrap">第 ${row.year} 年</td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right">${formatMoney(row.startBalance)}</td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-fin-muted">+ ${formatMoney(row.contribution)}</td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-fin-muted">+ ${formatMoney(row.interestEarned)}</td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-purple-400">${formatMoney(row.totalInterest)}</td>
+                    <td class="px-6 py-3 whitespace-nowrap text-right text-fin-accent font-bold">${formatMoney(row.endBalance)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        // --- 事件绑定与初始化 ---
+
+        // 绑定所有表单元素的 input/change 事件，实现实时反馈
+        const formElements = document.querySelectorAll('#calcForm input, #calcForm select');
+        formElements.forEach(el => {
+            el.addEventListener('input', () => {
+                // 同步滑块和标签显示
+                if (el.id === 'years') {
+                    document.getElementById('yearsLabel').innerText = `${el.value} 年`;
+                }
+                updateUI();
+            });
+        });
+
+        // 导出功能
+        const exportData = (type) => {
+            if (type === 'image') {
+                if (!myChart) return;
+                const link = document.createElement('a');
+                link.download = '财富增长推演图表.png';
+                link.href = myChart.toBase64Image();
+                link.click();
+            } else if (type === 'csv') {
+                const inputs = getInputs();
+                const result = simulateCompoundInterest(inputs);
+                
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+                csvContent += "年份,期初本金(¥),当年追加定投(¥),当年复利收益(¥),累计总收益(¥),期末总资产(¥)\n";
+                
+                result.yearlyData.forEach(row => {
+                    let rowData = [
+                        row.year,
+                        row.startBalance.toFixed(2),
+                        row.contribution.toFixed(2),
+                        row.interestEarned.toFixed(2),
+                        row.totalInterest.toFixed(2),
+                        row.endBalance.toFixed(2)
+                    ];
+                    csvContent += rowData.join(",") + "\n";
+                });
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "财富逐年推演明细.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        };
+
+        // 页面加载完毕后初次渲染
+        window.addEventListener('DOMContentLoaded', () => {
+            updateUI();
+            
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+            
+            window.addEventListener('scroll', () => {
+                const nav = document.getElementById('mainNav');
+                if (window.scrollY > 10) {
+                    nav.classList.add('nav-scrolled');
+                } else {
+                    nav.classList.remove('nav-scrolled');
+                }
+            });
+            
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+        });
+    </script>
+	      	<!--baidu tongji-->
+<script>
+var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?687951819b5d8326225377376561c9d0";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+</script>
+	
+</body>
+</html>
