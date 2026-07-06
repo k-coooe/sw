@@ -646,16 +646,23 @@ function isSujiaoYu(yuEdition) {
 
 // 语文+数学是否允许配对
 function yuShuAllowed(yuEd, shuEd) {
+  const yuSpec = parseEditionSpec(yuEd);
+  const shuSpec = parseEditionSpec(shuEd);
+  // 地区变体必须一致（江苏专用语文只配江苏专用数学，普通版只配普通版）
+  if (yuSpec.variant !== shuSpec.variant) return false;
   if (isSujiaoYu(yuEd)) return isSujiaoEd(shuEd) && !isWuSiZhiEd(shuEd);
   return true;
 }
 // 语文+英语是否允许配对
 function yuYingAllowed(yuEd, yingEd) {
-  // 译林=苏教（英语体系等价）
+  const yuSpec = parseEditionSpec(yuEd);
+  const yingSpec = parseEditionSpec(yingEd);
+  // 地区变体必须一致
+  if (yuSpec.variant !== yingSpec.variant) return false;
   const ENG_EQUIV = new Set(['译林','苏教']);
-  const yingBase = parseEditionSpec(yingEd).base;
-  if (isSujiaoYu(yuEd)) return ENG_EQUIV.has(yingBase); // 苏教语文→译林或苏教英语
-  return !ENG_EQUIV.has(yingBase); // 人教语文→非译林/苏教英语
+  const yingBase = yingSpec.base;
+  if (isSujiaoYu(yuEd)) return ENG_EQUIV.has(yingBase);
+  return !ENG_EQUIV.has(yingBase);
 }
 
 // ══════════════════════════════════════════════════════
@@ -681,6 +688,7 @@ const EDITION_BASES = [
   // ── 普通版本 ──
   {key:'人教',      tag:'人教',   blocked:false},
   {key:'苏教',      tag:'苏教',   blocked:false},
+  {key:'江苏',      tag:'苏教',   blocked:false},  // 江苏=苏教体系
   {key:'北师',      tag:'北师',   blocked:false},
   {key:'译林',      tag:'译林',   blocked:false},
   {key:'外研',      tag:'外研',   blocked:false},
@@ -802,6 +810,7 @@ function buildCombosForYu(yuw, shuList, engList, allYuList) {
     return isTraditionalShu(s.edition) && !ss.isWuSiZhi && !ss.isSujiao;
   });
   for (const shu of tradShu) {
+    if (!yuShuAllowed(yuw.edition, shu.edition)) continue; // variant必须一致
     results.push([yuw, shu]);
     // 3本：人教英语或无版本英语（不含外研/译林/精通等）
     const validEng = engList.filter(e=>{
@@ -822,6 +831,7 @@ function buildCombosForYu(yuw, shuList, engList, allYuList) {
       return ss.isSujiao && !ss.isWuSiZhi;
     });
     for (const shu of suShu) {
+      if (!yuShuAllowed(yuw.edition, shu.edition)) continue; // variant必须一致
       results.push([yuw, shu]);
       // 译林英语
       // 译林英语=苏教英语，两者等价
@@ -1489,9 +1499,12 @@ function parsePlatformSku(line) {
       if (inlineBracket && /[语数英]/.test(inlineBracket[1])) {
         const innerDesc = inlineBracket[1];
         // 按+拆分：语文+数学+英语人教 → ['语文','数学','英语人教']
+        // segClean里可能有额外的版本词（如"计算达人-苏教"），提取出来作为补充版本
+        const segCleanEd = extractEditionFromDesc(segClean);
         for (const part of innerDesc.split('+').map(s=>s.trim())) {
           const subj = descToSubject(part) !== '其他' ? descToSubject(part) : descToSubject(segClean+part);
-          const ed   = extractEditionFromDesc(part) || trailingEd;
+          // 版本优先级：part内的版本 > segClean里的版本 > trailingEd
+          const ed = extractEditionFromDesc(part) || segCleanEd || trailingEd;
           subjects.push(subj);
           segEditions.push(ed);
         }
