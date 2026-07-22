@@ -25,6 +25,10 @@
       position:relative;bottom:-2px;transition:color .15s,background .15s}
     .tab.active{color:var(--accent);background:var(--surface);
       border-color:var(--border);border-bottom-color:var(--surface)}
+    .tab-link{padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer;
+      color:var(--muted);text-decoration:none;display:inline-flex;align-items:center;
+      border-radius:6px 6px 0 0;transition:color .15s,background .15s;white-space:nowrap}
+    .tab-link:hover{color:var(--accent);background:#f3f4f8}
     .tab-panel{display:none}
     .tab-panel.active{display:block}
 
@@ -117,6 +121,9 @@
     <button class="tab active" onclick="switchTab('sort')">📋 单品排序</button>
     <button class="tab" onclick="switchTab('combo')">📦 组合装生成</button>
     <button class="tab" onclick="switchTab('match')">🔗 平台SKU匹配</button>
+    <div style="width:1px;height:20px;background:var(--border);margin:0 4px;align-self:center"></div>
+    <a href="url_tool.html" target="_blank" class="tab-link">URL工具</a>
+    <a href="sku_tool.html" target="_blank" class="tab-link">SKU解析</a>
     <div style="flex:1"></div>
     <!-- 天气 -->
     <div id="weather-widget" style="display:flex;align-items:center;gap:10px;padding:4px 14px 6px;font-size:13px;color:var(--text)">
@@ -726,7 +733,7 @@ function parseEditionSpec(ed) {
     specKey:   tag + (variant ? '+'+variant : ''),
     isBlocked: blocked,
     isWuSiZhi: variant === '五四制',
-    isSujiao:  tag === '苏教' || ed.includes('江苏'),
+    isSujiao:  tag === '苏教' || (ed.includes('江苏') && !ed.includes('人教')), // 江苏专用人教不是苏教系
     // 主流英语：非黑名单 且 是已知英语版本
     isMainEng: !blocked && ['人教','译林','外研','北师'].includes(tag),
   };
