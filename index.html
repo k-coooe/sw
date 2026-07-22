@@ -664,11 +664,13 @@ function yuShuAllowed(yuEd, shuEd) {
 function yuYingAllowed(yuEd, yingEd) {
   const yuSpec = parseEditionSpec(yuEd);
   const yingSpec = parseEditionSpec(yingEd);
-  // 地区变体必须一致
-  if (yuSpec.variant !== yingSpec.variant) return false;
   const ENG_EQUIV = new Set(['译林','苏教']);
   const yingBase = yingSpec.base;
+  // 译林/苏教英语不区分地区variant（市面通常只有一种），只看base是否为苏教系
+  // 只要语文是苏教系，任意地区variant的译林/苏教英语都能配
   if (isSujiaoYu(yuEd)) return ENG_EQUIV.has(yingBase);
+  // 人教语文：英语variant需一致，且base非苏教系
+  if (yuSpec.variant !== yingSpec.variant) return false;
   return !ENG_EQUIV.has(yingBase);
 }
 
@@ -799,8 +801,9 @@ function buildCombosForYu(yuw, shuList, engList, allYuList) {
       return ss.isSujiao && !ss.isWuSiZhi;
     });
     for (const shu of suShu) {
+      if (!yuShuAllowed(yuw.edition, shu.edition)) continue; // 语文数学地区variant需一致
       results.push([yuw, shu]);
-      // 译林英语=苏教英语，两者等价
+      // 译林/苏教英语市面通常不分地区，只要base是苏教系即可配，不检查variant
       const yilinEng = engList.filter(e=>{
         const es=parseEditionSpec(e.edition);
         return (es.base==='译林'||es.base==='苏教') && !es.isWuSiZhi && !es.isBlocked;
