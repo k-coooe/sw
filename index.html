@@ -1403,8 +1403,8 @@ function parsePlatformSku(line) {
   }
 
   // ── 第二步：取逗号后的原始内容作为排序键和解析源 ──
-  // 支持英文逗号和中文逗号作为分隔符
-  const commaIdx = skuName.search(/[,，]/);
+  // 支持英文逗号、中文逗号、分号作为分隔符
+  const commaIdx = skuName.search(/[,，;；]/);
   const rawAfterComma = commaIdx>=0 ? skuName.slice(commaIdx+1).trim() : skuName;
 
   // ── 第三步：规范化逗号后内容，统一提取科目+版本 ──
@@ -1417,14 +1417,17 @@ function parsePlatformSku(line) {
   //   F: 【2本】语文默写+数学计算苏教版
   //   G: 语文+数学(人教)
 
-  // 从【N本】直接提取本数（最可靠，优先于subjects推断）
-  const nBenMatch = rawAfterComma.match(/【(\d+)本/);
+  // 从"N本"直接提取本数（支持【N本】和"N本【"两种顺序）
+  const nBenMatch = rawAfterComma.match(/【(\d+)本/) || rawAfterComma.match(/(\d+)本[【:：]/);
   const declaredItemCount = nBenMatch ? parseInt(nBenMatch[1]) : 0; // 0=未声明，用subjects.length
 
-  // 清理：去掉本数标注"2本："/"【2本】"等，去掉"版"字
+  // 清理：去掉本数标注"2本："/"【2本】"等、"科目:"等标签前缀、"版"字
   let cleaned = rawAfterComma
     .replace(/【\d+本[^】]*】/g,'')   // 【2本】【3本江苏专用】
     .replace(/\d+本[：:]\s*/g,'')      // 2本：
+    .replace(/\d+本(?=【)/g,'')        // 2本【...】（本数在括号前无冒号）
+    .replace(/^(科目|适用学龄段|学龄段)[：:]/,'') // 去掉标签前缀
+    .replace(/（/g,'(').replace(/）/g,')')  // 全角括号统一转半角
     .replace(/([^地方省])(版)/g,'$1') // "版"字（保留"版本"里的版）
     .trim();
 
@@ -1433,9 +1436,10 @@ function parsePlatformSku(line) {
   // 格式如：英语【人教】 → 科目=英语，版本=人教
   //         数学【北师版】 → 科目=数学，版本=北师
   //         数学计算苏教 → 科目=数学，版本=苏教（从文本提取）
+  //         数学(北师版) / 数学（北师版）→ 全角已转半角统一处理
 
-  // 先找末尾统一括号（格式A/G）
-  const trailingBracket = cleaned.match(/\(([^)）]+)\)\s*$/);
+  // 先找末尾统一括号（格式A/G，全角已转半角所以只需匹半角）
+  const trailingBracket = cleaned.match(/\(([^)]+)\)\s*$/);
   const trailingEd = trailingBracket ? trailingBracket[1].trim() : '';
   if (trailingBracket) {
     cleaned = cleaned.slice(0, cleaned.lastIndexOf('(')).trim();
