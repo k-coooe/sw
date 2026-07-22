@@ -648,7 +648,8 @@ let comboGroups=[];
 //   苏教系语文（含苏教/江苏）→ 只能配苏教数学 + 译林英语
 //   其他语文（人教/通用/无苏教字样）→ 数学不限制，英语配人教系
 function isSujiaoYu(yuEdition) {
-  return ['苏教','江苏'].some(k => yuEdition.includes(k));
+  // 复用parseEditionSpec的统一判断逻辑（已剥离variant再匹配base，避免"江苏专用人教"被误判）
+  return parseEditionSpec(yuEdition).isSujiao;
 }
 
 // 语文+数学是否允许配对
@@ -745,10 +746,10 @@ function parseEditionSpec(ed) {
 // 两个版本是否属于同一规格（base相同 且 variant相同）
 function sameSpec(edA, edB, subj) {
   const a = parseEditionSpec(edA), b = parseEditionSpec(edB);
-  // 英语科目：译林=苏教（同一体系）
+  // 英语科目：译林=苏教（同一体系），市面通常不分地区，不检查variant
   const engEquiv = new Set(['译林','苏教']);
   if (subj==='英' || (!subj && engEquiv.has(a.base) && engEquiv.has(b.base))) {
-    if (engEquiv.has(a.base) && engEquiv.has(b.base)) return a.variant===b.variant;
+    if (engEquiv.has(a.base) && engEquiv.has(b.base)) return true; // 只要都是译林/苏教系即可，不比variant
   }
   return a.base===b.base && a.variant===b.variant;
 }
