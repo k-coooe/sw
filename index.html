@@ -717,15 +717,16 @@ function parseEditionSpec(ed) {
   for (const v of EDITION_VARIANTS) {
     if (ed.includes(v)) { variant = v; break; }
   }
-  // 2. 去掉括号内容和"版"字后匹配主体
-  const edClean = ed.replace(/[（(][^）)]*[）)]/g,'').replace(/版$/,'').trim();
+  // 2. 先剥离variant子串，避免"江苏专用"里的"江苏"被误判为苏教主体
+  const edNoVariant = variant ? ed.split(variant).join('') : ed;
+  const edClean = edNoVariant.replace(/[（(][^）)]*[）)]/g,'').replace(/版$/,'').trim();
   let tag = '', blocked = false;
   for (const b of EDITION_BASES) {
-    if (ed.includes(b.key) || edClean.includes(b.key)) {
+    if (edNoVariant.includes(b.key) || edClean.includes(b.key)) {
       tag = b.tag; blocked = b.blocked; break;
     }
   }
-  if (!tag) { tag = edClean || ed; blocked = false; }
+  if (!tag) tag = edClean; // 不再fallback到原始ed，纯variant标记时tag留空
 
   return {
     base:      tag,
@@ -733,7 +734,7 @@ function parseEditionSpec(ed) {
     specKey:   tag + (variant ? '+'+variant : ''),
     isBlocked: blocked,
     isWuSiZhi: variant === '五四制',
-    isSujiao:  tag === '苏教' || (ed.includes('江苏') && !ed.includes('人教')), // 江苏专用人教不是苏教系
+    isSujiao:  tag === '苏教',
     // 主流英语：非黑名单 且 是已知英语版本
     isMainEng: !blocked && ['人教','译林','外研','北师'].includes(tag),
   };
@@ -1347,12 +1348,16 @@ function normalizeEditionForSubject(edStr, subjHint) {
 function extractEditionFromDesc(desc, subjHint) {
   // 英语+苏教 → 直接返回译林
   if ((subjHint==='英' || desc.includes('英')) && desc.includes('苏教')) return '译林';
+  // 先剥离variant再匹配base，避免"江苏专用"里的"江苏"被误判为苏教主体
+  const variantFound = EDITION_VARIANTS.find(v => desc.includes(v));
+  const descNoVariant = variantFound ? desc.split(variantFound).join('') : desc;
   for (const ed of KNOWN_EDITIONS) {
-    if (desc.includes(ed)) {
-      const variantFound = EDITION_VARIANTS.find(v => desc.includes(v));
+    if (descNoVariant.includes(ed)) {
       return variantFound ? ed + variantFound : ed;
     }
   }
+  // 没找到base，但找到了variant（如单独出现"江苏专用"）→ 只返回variant标记
+  if (variantFound) return variantFound;
   return '';
 }
 
@@ -1429,6 +1434,7 @@ function parsePlatformSku(line) {
     .replace(/^(科目|适用学龄段|学龄段)[：:]/,'') // 去掉标签前缀
     .replace(/（/g,'(').replace(/）/g,')')  // 全角括号统一转半角
     .replace(/([^地方省])(版)/g,'$1') // "版"字（保留"版本"里的版）
+    .replace(/[;；,，、\s]+$/,'')      // 去掉末尾多余标点（分号/逗号/顿号等）
     .trim();
 
   // ── 第四步：拆分科目段，每段可能有内嵌【版本】或(版本) ──
@@ -1548,19 +1554,42 @@ function parsePlatformSku(line) {
   for (let i=0;i<subjects.length;i++) {
     const subj  = subjects[i];
     const ownEd = segEditions[i];
+    // 提取本段的variant（即使base为空，也可能带有地区标记，如纯"江苏专用"）
+    const ownSpec = ownEd ? parseEditionSpec(ownEd) : null;
+    const ownVariant = ownSpec ? ownSpec.variant : '';
     let segEd;
 
     if (subj==='语') {
-      // 语文：只看本段自身版本词（ownEd）来决定是否苏教系
-      // globalTagEdition 可能来自数学段的苏教标注，不能传染给语文
-      // 例：语文+数学【苏教版】→ 语文段自身无版本 → 人教（普通语文）
-      //     语文苏教+数学 → 语文段自身含苏教 → 苏教语文
-      segEd = (ownEd && isSuJiaoEd(ownEd)) ? ownEd : '人教';
-    } else if (subj==='英' && !ownEd && subjects.length>1) {
-      // 多本英语无版本：按数学段版本推断
-      const shuIdx = subjects.findIndex(s=>s==='数');
-      const shuEd  = shuIdx>=0 ? (segEditions[shuIdx]||globalFallback) : globalFallback;
-      segEd = isSuJiaoEd(shuEd) ? '译林' : '人教';
+      // 语文：本段有明确苏教base → 苏教语文；否则默认人教（保留地区variant）
+      if (ownSpec && ownSpec.base==='苏教') {
+        segEd = ownEd;
+      } else {
+        segEd = '人教' + ownVariant;
+      }
+    } else if (subj==='数') {
+      if (ownSpec && ownSpec.base) {
+        // 已有明确base（人教/北师/苏教/青岛等）
+        segEd = ownEd;
+      } else if (ownVariant) {
+        // 只有地区标记、无明确base（如纯"江苏专用"）→ 按惯例数学默认苏教体系
+        segEd = '苏教' + ownVariant;
+      } else {
+        segEd = ownEd || globalFallback;
+      }
+    } else if (subj==='英') {
+      if (ownSpec && ownSpec.base) {
+        segEd = ownEd;
+      } else if (ownVariant) {
+        // 纯地区标记英语 → 按惯例默认译林
+        segEd = '译林' + ownVariant;
+      } else if (!ownEd && subjects.length>1) {
+        // 多本英语无版本：按数学段版本推断
+        const shuIdx = subjects.findIndex(s=>s==='数');
+        const shuEd  = shuIdx>=0 ? (segEditions[shuIdx]||globalFallback) : globalFallback;
+        segEd = isSuJiaoEd(shuEd) ? '译林' : '人教';
+      } else {
+        segEd = ownEd || globalFallback;
+      }
     } else {
       segEd = ownEd || globalFallback;
     }
