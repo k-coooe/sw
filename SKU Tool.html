@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SKU 解析器</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f4f6fb;--surface:#fff;--border:#e2e6ef;
+      --accent:#3b5bdb;--accent-light:#eef1fd;
+      --text:#1a1d2e;--muted:#6b7280;--warn:#f59e0b;
+      --green:#2d9e5f;--radius:8px;
+      --shadow:0 1px 4px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);
+    }
+    body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+      background:var(--bg);color:var(--text);min-height:100vh;padding:24px 16px 60px}
+    .page{max-width:1200px;margin:0 auto}
+
+    .topbar{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+    .back-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+      font-size:13px;border-radius:6px;border:1px solid var(--border);
+      background:var(--surface);color:var(--muted);cursor:pointer;
+      text-decoration:none;transition:background .15s}
+    .back-btn:hover{background:#f3f4f8;color:var(--text)}
+    .page-title{font-size:18px;font-weight:700;color:var(--text)}
+
+    .card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);box-shadow:var(--shadow);
+      padding:20px 24px;margin-bottom:16px}
+
+    textarea{width:100%;height:90px;padding:10px 12px;border:1px solid var(--border);
+      border-radius:6px;font-size:13px;font-family:Consolas,"Microsoft YaHei",monospace;
+      resize:vertical;line-height:1.6;color:var(--text);background:#fafbfd;
+      transition:border-color .2s}
+    textarea:focus{outline:none;border-color:var(--accent);background:#fff}
+
+    .toolbar{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+    button{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;
+      font-size:13px;font-family:inherit;border-radius:6px;
+      border:1px solid var(--border);background:var(--surface);
+      color:var(--text);cursor:pointer;transition:background .15s;white-space:nowrap}
+    button:hover{background:#f3f4f8}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+    button.primary:hover{background:#2f4dc4}
+
+    .info-bar{background:var(--accent-light);border:1px solid #c5cff7;
+      border-radius:6px;padding:6px 12px;font-size:13px;color:var(--accent);
+      flex:1;min-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      display:none}
+
+    .status{font-size:13px;color:var(--muted);margin:10px 0 6px}
+    .status b{color:var(--text)}
+    .error{color:#dc2626;font-size:13px;font-weight:600;margin:10px 0}
+
+    .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);
+      background:var(--surface)}
+    table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+    th,td{border-bottom:1px solid var(--border);padding:8px 10px;
+      text-align:left;vertical-align:middle;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    td{border-color:#f0f2f8}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:#f8f9ff}
+
+    thead tr:first-child th{background:#f8f9fd;font-weight:700;font-size:12px;
+      text-transform:uppercase;letter-spacing:.03em;color:var(--muted);
+      position:sticky;top:0;z-index:1;cursor:pointer;user-select:none;
+      position:relative;overflow:visible}
+    th.sortable::after{content:"";opacity:.5;font-size:13px;color:var(--accent);
+      position:absolute;right:6px;top:50%;transform:translateY(-50%)}
+    th.sort-asc::after{content:"↑"}
+    th.sort-desc::after{content:"↓"}
+    .header-text{display:block;padding-right:18px;overflow:hidden;text-overflow:ellipsis}
+
+    .filter-row th{padding:4px 6px;background:#f1f3f9}
+    .filter-row input{width:100%;padding:4px 6px;border:1px solid var(--border);
+      border-radius:4px;font-size:12px;font-family:inherit;background:#fff}
+    .filter-row input:focus{outline:none;border-color:var(--accent)}
+
+    .resizer{position:absolute;right:0;top:0;height:100%;width:5px;
+      cursor:col-resize;user-select:none;opacity:0;background:var(--accent)}
+    th:hover .resizer{opacity:.3}
+    .resizer:hover,.resizer.dragging{opacity:.7!important}
+
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+      background:rgba(26,29,46,.92);color:#fff;padding:8px 18px;
+      border-radius:20px;font-size:13px;opacity:0;
+      transition:opacity .25s;pointer-events:none;z-index:999}
+    .toast.show{opacity:1}
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <a href="index.html" class="back-btn">← 返回</a>
+    <span class="page-title">📚 SKU 解析器</span>
+  </div>
+
+  <div class="card">
+    <textarea id="source" placeholder="宝贝页面 Ctrl+U 全选复制，粘贴源码…"></textarea>
+    <div class="toolbar">
+      <button class="primary" onclick="parse()">🚀 解析 SKU</button>
+      <button onclick="exportCSV()" id="exportBtn" disabled>📤 导出 CSV</button>
+      <button onclick="resetColumnWidths()">↺ 重置列宽</button>
+      <div id="itemInfoBar" class="info-bar"></div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="table-wrap">
+      <table id="resultTable">
+        <colgroup id="colgroup"></colgroup>
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="copyToast" class="toast">已复制列内容</div>
+
+<script>
+    let globalResults = [];
+    let globalItemInfo = { id: '', title: '' };
+    const COLUMNS = ['skuId', '学龄段', '科目与版本', '优惠前价格', '券后价', '库存状态', '限购数量'];
+
+    const DEFAULT_WIDTHS = {
+      skuId: 130,
+      学龄段: 120,
+      '科目与版本': 350,
+      优惠前价格: 100,
+      券后价: 100,
+      库存状态: 100,
+      限购数量: 100
+    };
+
+    const COLUMN_NAMES = {
+      skuId: 'SKU ID',
+      学龄段: '学龄段',
+      科目与版本: '科目与版本',
+      优惠前价格: '优惠前价格',
+      券后价: '券后价',
+      库存状态: '库存状态',
+      限购数量: '限购数量'
+    };
+
+    let columnWidths = { ...DEFAULT_WIDTHS };
+    try {
+      const saved = localStorage.getItem('tmall_sku_column_widths');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        for (const key in columnWidths) {
+          if (parsed[key] !== undefined) columnWidths[key] = parsed[key];
+        }
+      }
+    } catch (e) { console.warn('加载列宽失败'); }
+
+    const columnFilters = {};
+    let currentSort = { col: null, asc: true };
+
+    function parse() {
+      globalResults = [];
+      globalItemInfo = { id: '', title: '' };
+      for (const key in columnFilters) delete columnFilters[key];
+      currentSort = { col: null, asc: true };
+      document.getElementById('tableBody').innerHTML = '';
+      document.getElementById('tableHead').innerHTML = '';
+      document.getElementById('colgroup').innerHTML = '';
+      document.getElementById('itemInfoBar').style.display = 'none';
+      document.querySelectorAll('.error, .status').forEach(el => el.remove());
+      document.getElementById('exportBtn').disabled = true;
+
+      const src = document.getElementById('source').value.trim();
+      if (!src) return showMsg('请粘贴源码', 'error');
+
+      try {
+        const itemMatch = src.match(/data-item\s*=\s*["'](\d+)["']/i);
+        globalItemInfo.id = itemMatch ? itemMatch[1] : '';
+
+        const titleMatch = src.match(/"x-uid"\s*:\s*""\s*,\s*"title"\s*:\s*"([^"]*)"/);
+        globalItemInfo.title = titleMatch ? titleMatch[1].replace(/\\"/g, '"') : '';
+
+        const vidToText = {};
+        const vidRegex = /data-vid="(\d+)"/gi;
+        let matches = [], match;
+        while ((match = vidRegex.exec(src)) !== null) {
+          matches.push({ vid: match[1], index: match.index });
+        }
+        if (matches.length === 0) throw new Error('未找到任何 data-vid 属性');
+
+        for (let i = 0; i < matches.length; i++) {
+          const current = matches[i];
+          const nextIndex = i + 1 < matches.length ? matches[i + 1].index : src.length;
+          const slice = src.substring(current.index, nextIndex);
+          const tm = slice.match(/<span[^>]+title="([^"]*)"[^>]*>/i);
+          if (tm) {
+            const title = tm[1].trim();
+            if (title && !vidToText[current.vid]) vidToText[current.vid] = title;
+          }
+        }
+        if (Object.keys(vidToText).length === 0) throw new Error('找到 data-vid，但未匹配到对应的 title 文本');
+
+        const skuMatch = src.match(/"skus"\s*:\s*(\[[^\]]*\])/);
+        if (!skuMatch) throw new Error('未找到 "skus" 字段');
+        let skusStr = skuMatch[1].replace(/,\s*([\]}])/g, '$1');
+        const skus = JSON.parse(skusStr);
+
+        const startIdx = src.indexOf('"sku2info"');
+        if (startIdx === -1) throw new Error('未找到 "sku2info"');
+        let braceStart = src.indexOf('{', startIdx);
+        if (braceStart === -1) throw new Error('未找到 sku2info 的 {');
+
+        let depth = 0, i = braceStart;
+        for (; i < src.length; i++) {
+          if (src[i] === '{') depth++;
+          else if (src[i] === '}') { depth--; if (depth === 0) { i++; break; } }
+        }
+        if (depth !== 0) throw new Error('sku2info JSON 未闭合');
+        const sku2info = JSON.parse(src.substring(braceStart, i));
+
+        globalResults = [];
+        for (const item of skus) {
+          if (!item.propPath || !item.skuId) continue;
+          const skuId = String(item.skuId);
+          const info = sku2info[skuId];
+          if (!info) continue;
+          const valueIds = item.propPath.split(';').map(p => {
+            const idx = p.indexOf(':');
+            return idx > 0 ? p.slice(idx + 1) : null;
+          }).filter(Boolean);
+          let 学龄段 = '—', 科目与版本 = '—';
+          if (valueIds.length === 1) {
+            科目与版本 = vidToText[valueIds[0]] || '—';
+          } else if (valueIds.length >= 2) {
+            学龄段 = vidToText[valueIds[0]] || '—';
+            科目与版本 = vidToText[valueIds[1]] || '—';
+          }
+          globalResults.push({
+            skuId, 学龄段, 科目与版本,
+            优惠前价格: (info.price?.priceText || '').replace(/起$/, ''),
+            券后价: (info.subPrice?.priceText || '').replace(/起$/, ''),
+            库存状态: info.quantity > 0 ? '有货' : '无货',
+            限购数量: info.limit ? `${info.limit}件` : '不限'
+          });
+        }
+        if (globalResults.length === 0) throw new Error('未解析到有效 SKU，请检查数据完整性');
+
+        const infoBar = document.getElementById('itemInfoBar');
+        if (globalItemInfo.id || globalItemInfo.title) {
+          infoBar.textContent = `ID: ${globalItemInfo.id || '未知'}  标题：${globalItemInfo.title || '未知'}`;
+          infoBar.style.display = 'block';
+        }
+        renderTable(true);
+        document.getElementById('exportBtn').disabled = false;
+
+      } catch (e) {
+        console.error(e);
+        showMsg('❌ ' + e.message, 'error');
+        document.getElementById('exportBtn').disabled = true;
+      }
+    }
+
+    function showMsg(text, cls) {
+      document.querySelectorAll('.error, .status').forEach(el => el.remove());
+      const p = document.createElement('p');
+      p.className = cls;
+      p.innerHTML = text;
+      document.querySelector('.card:last-of-type').insertAdjacentElement('beforebegin', p);
+    }
+
+    function renderTable(rebuildHead = false) {
+      const colgroup = document.getElementById('colgroup');
+      colgroup.innerHTML = '';
+      COLUMNS.forEach(col => {
+        const colEl = document.createElement('col');
+        colEl.style.width = columnWidths[col] + 'px';
+        colgroup.appendChild(colEl);
+      });
+
+      if (rebuildHead) {
+        const thead = document.getElementById('tableHead');
+        let headers = '', filterRow = '';
+        COLUMNS.forEach((col, index) => {
+          const name = COLUMN_NAMES[col];
+          let cls = 'sortable';
+          if (currentSort.col === col) cls += currentSort.asc ? ' sort-asc' : ' sort-desc';
+          headers += `<th data-col="${col}" style="width:${columnWidths[col]}px;" class="${cls}">
+            <span class="header-text">${name}</span>
+            <div class="resizer" data-index="${index}"></div>
+          </th>`;
+          filterRow += `<th style="width:${columnWidths[col]}px;"><input type="text" placeholder="筛选…" data-col="${col}" value="${columnFilters[col] || ''}"></th>`;
+        });
+        thead.innerHTML = `<tr>${headers}</tr><tr class="filter-row">${filterRow}</tr>`;
+
+        thead.querySelectorAll('.header-text').forEach(span => {
+          span.addEventListener('click', e => {
+            e.stopPropagation();
+            toggleSort(span.closest('th').getAttribute('data-col'));
+          });
+        });
+        thead.querySelectorAll('tr:first-child th').forEach((th, index) => {
+          th.addEventListener('click', e => {
+            if (e.target.classList.contains('resizer') || e.target.closest('.resizer')) return;
+            if (e.target.classList.contains('header-text')) return;
+            copyColumn(index);
+          });
+        });
+        thead.addEventListener('input', e => {
+          if (e.target.tagName === 'INPUT') setColumnFilter(e.target.getAttribute('data-col'), e.target.value);
+        });
+        initResizableColumns();
+      }
+
+      let displayData = [...globalResults];
+      for (const [col, keyword] of Object.entries(columnFilters)) {
+        if (keyword) {
+          const k = keyword.toLowerCase();
+          displayData = displayData.filter(row => String(row[col] || '').toLowerCase().includes(k));
+        }
+      }
+      if (currentSort.col) {
+        const col = currentSort.col;
+        displayData.sort((a, b) => {
+          let valA = String(a[col] || '').trim(), valB = String(b[col] || '').trim();
+          const numA = parseFloat(valA.replace(/[^\d.-]/g, '')), numB = parseFloat(valB.replace(/[^\d.-]/g, ''));
+          if (!isNaN(numA) && !isNaN(numB)) return currentSort.asc ? numA - numB : numB - numA;
+          return currentSort.asc ? valA.localeCompare(valB, 'zh-CN') : valB.localeCompare(valA, 'zh-CN');
+        });
+      }
+
+      document.getElementById('tableBody').innerHTML = displayData.map(r =>
+        `<tr>${COLUMNS.map(col => `<td style="width:${columnWidths[col]}px;">${r[col]}</td>`).join('')}</tr>`
+      ).join('');
+
+      showMsg(`✅ 显示 <b>${displayData.length}</b> / 共 <b>${globalResults.length}</b> 个 SKU`, 'status');
+    }
+
+    function toggleSort(col) {
+      if (currentSort.col === col) {
+        if (currentSort.asc) currentSort.asc = false;
+        else { currentSort.col = null; currentSort.asc = true; }
+      } else { currentSort.col = col; currentSort.asc = true; }
+      renderTable(false);
+    }
+
+    function setColumnFilter(col, value) {
+      if (value.trim() === '') delete columnFilters[col];
+      else columnFilters[col] = value.trim();
+      renderTable(false);
+    }
+
+    function copyColumn(index) {
+      const colKey = COLUMNS[index];
+      const cells = document.querySelectorAll(`#tableBody td:nth-child(${index + 1})`);
+      const text = [COLUMN_NAMES[colKey], ...Array.from(cells).map(c => c.textContent)].join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        const t = document.getElementById('copyToast');
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 1200);
+      }).catch(console.error);
+    }
+
+    function exportCSV() {
+      if (!globalResults?.length) return;
+      let data = [...globalResults];
+      for (const [col, keyword] of Object.entries(columnFilters)) {
+        if (keyword) { const k = keyword.toLowerCase(); data = data.filter(r => String(r[col]||'').toLowerCase().includes(k)); }
+      }
+      const header = COLUMNS.map(col => `"${COLUMN_NAMES[col]}"`).join(',');
+      const rows = data.map(row => COLUMNS.map(col => `"${String(row[col]||'').replace(/"/g,'""')}"`).join(','));
+      const bom = new Uint8Array([0xEF,0xBB,0xBF]);
+      const blob = new Blob([bom, [header,...rows].join('\n')], {type:'text/csv;charset=utf-8;'});
+      let filename = globalItemInfo.id || '天猫SKU';
+      if (globalItemInfo.id && globalItemInfo.title) filename += '_' + globalItemInfo.title.replace(/[\\/:*?"<>|]/g,'').substring(0,15);
+      filename += '_' + new Date().toISOString().slice(0,10) + '.csv';
+      const a = Object.assign(document.createElement('a'), {href:URL.createObjectURL(blob), download:filename});
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function initResizableColumns() {
+      document.querySelectorAll('.resizer').forEach(resizer => {
+        resizer.addEventListener('mousedown', e => {
+          e.preventDefault();
+          const idx = parseInt(e.target.getAttribute('data-index'), 10);
+          const col = COLUMNS[idx];
+          const startX = e.pageX, startWidth = columnWidths[col];
+          resizer.classList.add('dragging');
+          const doDrag = e => {
+            const newWidth = Math.max(60, startWidth + e.pageX - startX);
+            columnWidths[col] = newWidth;
+            document.querySelectorAll(`th:nth-child(${idx+1}), td:nth-child(${idx+1})`).forEach(el => el.style.width = newWidth + 'px');
+            document.querySelectorAll('#colgroup col')[idx].style.width = newWidth + 'px';
+          };
+          const stopDrag = () => {
+            resizer.classList.remove('dragging');
+            localStorage.setItem('tmall_sku_column_widths', JSON.stringify(columnWidths));
+            document.removeEventListener('mousemove', doDrag);
+            document.removeEventListener('mouseup', stopDrag);
+          };
+          document.addEventListener('mousemove', doDrag);
+          document.addEventListener('mouseup', stopDrag);
+        });
+      });
+    }
+
+    function resetColumnWidths() {
+      columnWidths = { ...DEFAULT_WIDTHS };
+      localStorage.removeItem('tmall_sku_column_widths');
+      renderTable(true);
+    }
+</script>
+</body>
+</html>
